@@ -18,6 +18,7 @@ class NetworkScanner:
         self.lock = threading.Lock()
         self.scanning_active = False
         self.scanning_paused = False
+         self.load_from_db() #load persistent data into memory
 
     def start(self, network, port_range, timeout, scan_interval):
         self.network = network
@@ -101,3 +102,21 @@ class NetworkScanner:
     def get_data(self):
         with self.lock:
             return self.hosts.copy()
+    
+    def load_from_db(self):
+    from db import db_session  # ensure we have access to the session
+    from models import Host
+    db_hosts = db_session.query(Host).all()
+    for db_host in db_hosts:
+        # Assume that port_scan_result is stored as a comma-separated string.
+        ports = db_host.port_scan_result.split(',') if db_host.port_scan_result else []
+        # Convert last_seen datetime to a timestamp (float) for our in-memory dict.
+        self.hosts[db_host.ip] = {
+            'mac': db_host.mac,
+            'vendor': db_host.vendor,
+            'ports': ports,
+            'status': 'offline',  # Mark offline until confirmed by a new ARP scan.
+            'last_seen': db_host.last_seen.timestamp(),
+            'port_scan_in_progress': False
+        }
+
