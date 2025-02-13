@@ -1,6 +1,6 @@
 # Spynet
 
-Spynet is a modular network scanning tool designed for cybersecurity professionals. It performs ARP scans to detect live hosts on your network and then conducts SYN-based port scans on those hosts. The results are displayed in a live-updating, modern React dashboard with a dark theme.
+Spynet is a modular network scanning tool designed for IT professionals and hobbiest with an ever growing IT landscape in their homes. It performs ARP scans to detect live hosts on your network and then conducts SYN-based port scans on those hosts. The results are displayed in a live-updating, modern React dashboard with a dark theme.
 
 ## Why Spynet?
 
