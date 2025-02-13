@@ -18,7 +18,7 @@ class NetworkScanner:
         self.lock = threading.Lock()
         self.scanning_active = False
         self.scanning_paused = False
-         self.load_from_db() #load persistent data into memory
+        self.load_from_db() #load persistent data into memory
 
     def start(self, network, port_range, timeout, scan_interval):
         self.network = network
