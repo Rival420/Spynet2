@@ -6,7 +6,7 @@ from port_scanner import scan_ports_for_host
 from models import Host
 from sqlalchemy.orm.exc import NoResultFound
 from datetime import datetime
-from server import db_session  # Import the db_session from server.py
+from db import db_session  # Import the db_session from server.py
 
 class NetworkScanner:
     def __init__(self):
