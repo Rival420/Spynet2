@@ -1,112 +1,12 @@
 // App.js
 import React, { useState, useEffect } from 'react';
+import ScannerControls from './ScannerControls';
 import socketIOClient from 'socket.io-client';
 import './App.css';
 
 const ENDPOINT = 'http://192.168.1.81:5000';
 
 // ScannerControls component to start, pause, resume, and stop scanning.
-function ScannerControls({ endpoint }) {
-  const [network, setNetwork] = useState("");
-  const [portStart, setPortStart] = useState(1);
-  const [portEnd, setPortEnd] = useState(1024);
-  const [timeout, setTimeoutValue] = useState(2);
-  const [interval, setIntervalValue] = useState(60);
-
-  const startScanner = () => {
-    fetch(`${endpoint}/api/scanner/start`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ network, port_start: portStart, port_end: portEnd, timeout, interval })
-    })
-    .then((res) => res.json())
-    .then((data) => {
-      console.log("Scanner started", data);
-    })
-    .catch((err) => console.error(err));
-  };
-
-  const pauseScanner = () => {
-    fetch(`${endpoint}/api/scanner/pause`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    })
-    .then((res) => res.json())
-    .then((data) => console.log("Scanner paused", data))
-    .catch((err) => console.error(err));
-  };
-
-  const resumeScanner = () => {
-    fetch(`${endpoint}/api/scanner/resume`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    })
-    .then((res) => res.json())
-    .then((data) => console.log("Scanner resumed", data))
-    .catch((err) => console.error(err));
-  };
-
-  const stopScanner = () => {
-    fetch(`${endpoint}/api/scanner/stop`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    })
-    .then((res) => res.json())
-    .then((data) => console.log("Scanner stopped", data))
-    .catch((err) => console.error(err));
-  };
-
-  return (
-    <div className="scanner-controls">
-      <h2>Scanner Controls</h2>
-      <div>
-        <label>Network (CIDR):</label>
-        <input
-          type="text"
-          value={network}
-          onChange={(e) => setNetwork(e.target.value)}
-          placeholder="e.g. 192.168.1.0/24"
-        />
-      </div>
-      <div>
-        <label>Port Start:</label>
-        <input
-          type="number"
-          value={portStart}
-          onChange={(e) => setPortStart(e.target.value)}
-        />
-      </div>
-      <div>
-        <label>Port End:</label>
-        <input
-          type="number"
-          value={portEnd}
-          onChange={(e) => setPortEnd(e.target.value)}
-        />
-      </div>
-      <div>
-        <label>Timeout (sec):</label>
-        <input
-          type="number"
-          value={timeout}
-          onChange={(e) => setTimeoutValue(e.target.value)}
-        />
-      </div>
-      <div>
-        <label>Interval (sec):</label>
-        <input
-          type="number"
-          value={interval}
-          onChange={(e) => setIntervalValue(e.target.value)}
-        />
-      </div>
-      <button onClick={startScanner}>Start Scanning</button>
-      <button onClick={pauseScanner}>Pause</button>
-      <button onClick={resumeScanner}>Resume</button>
-      <button onClick={stopScanner}>Stop</button>
-    </div>
-  );
-}
 
 function App() {
   const [scanData, setScanData] = useState({});
