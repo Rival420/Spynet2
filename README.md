@@ -104,7 +104,7 @@ The following features are planned for future updates:
 - [ ] **Hostname Assignment:**  
    Provide an option in the GUI for users to assign custom hostnames to devices for easier identification.
 
-- [ x ] **GUI-Based Scanner Control:**  
+- [x] **GUI-Based Scanner Control:**  
    Add controls in the React dashboard to start, stop, and pause scanning, and allow configuration of scanning parameters (like scan interval and port range) through the GUI.
 
 ## Contributing
