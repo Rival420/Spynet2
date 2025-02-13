@@ -1,11 +1,12 @@
 // App.js
 import React, { useState, useEffect } from 'react';
+import ScannerControls from './ScannerControls';
 import socketIOClient from 'socket.io-client';
 import './App.css';
 
-// Use the environment variable if defined, otherwise default to the current origin.
-// const ENDPOINT = process.env.REACT_APP_API_ENDPOINT || window.location.origin;
 const ENDPOINT = 'http://192.168.1.81:5000';
+
+// ScannerControls component to start, pause, resume, and stop scanning.
 
 function App() {
   const [scanData, setScanData] = useState({});
@@ -16,26 +17,21 @@ function App() {
   const [rangeStart, setRangeStart] = useState(1);
   const [rangeEnd, setRangeEnd] = useState(1024);
 
-  // Connect to the SocketIO server and listen for updates.
   useEffect(() => {
     const socket = socketIOClient(ENDPOINT);
     socket.on('scan_update', (data) => {
       console.log('Received scan_update:', data);
       setScanData(data);
     });
-    return () => {
-      socket.disconnect();
-    };
+    return () => socket.disconnect();
   }, []);
 
-  // Handle clicking a host to show actions.
   const handleHostClick = (hostIp) => {
     setSelectedHost(hostIp);
     setBannerResult(null);
     setBannerPort('');
   };
 
-  // On-demand port scan from the React dashboard.
   const startPortScan = () => {
     if (!selectedHost) return;
     const payload = {
@@ -50,18 +46,15 @@ function App() {
     fetch(`${ENDPOINT}/api/command/portscan`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log('Port scan started:', data);
-      })
-      .catch((err) => {
-        console.error('Error starting port scan:', err);
-      });
+    .then((response) => response.json())
+    .then((data) => {
+      console.log('Port scan started:', data);
+    })
+    .catch((err) => console.error('Error starting port scan:', err));
   };
 
-  // On-demand banner grabbing from the React dashboard.
   const startBannerGrab = () => {
     if (!selectedHost || !bannerPort) return;
     const payload = {
@@ -72,19 +65,16 @@ function App() {
     fetch(`${ENDPOINT}/api/command/bannergrab`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log('Banner grab result:', data);
-        setBannerResult(data.banner);
-      })
-      .catch((err) => {
-        console.error('Error during banner grab:', err);
-      });
+    .then((response) => response.json())
+    .then((data) => {
+      console.log('Banner grab result:', data);
+      setBannerResult(data.banner);
+    })
+    .catch((err) => console.error('Error during banner grab:', err));
   };
 
-  // Render the list of hosts from the ARP scan.
   const renderHosts = () => {
     return Object.keys(scanData).map((ip) => {
       const host = scanData[ip];
@@ -94,7 +84,7 @@ function App() {
             {ip} <span className={host.status}>{host.status}</span>
           </h3>
           <p>MAC: {host.mac}</p>
-          <p>Vendor: {host.vendor ? host.vendor : 'Unknown'}</p>
+          <p>Vendor: {host.vendor}</p>
           <p>Open Ports: {host.ports ? host.ports.length : 0}</p>
           {host.port_scan_in_progress && (
             <p className="scanning-indicator">Port scan in progress...</p>
@@ -104,7 +94,6 @@ function App() {
     });
   };
 
-  // Render actions for the selected host.
   const renderSelectedHostActions = () => {
     if (!selectedHost) return null;
     return (
@@ -171,6 +160,7 @@ function App() {
       <header className="App-header">
         <h1>Spynet Dashboard</h1>
       </header>
+      <ScannerControls endpoint={ENDPOINT} />
       <main>
         <div className="host-list">{renderHosts()}</div>
         {renderSelectedHostActions()}

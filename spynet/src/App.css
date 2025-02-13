@@ -95,3 +95,98 @@
   font-style: italic;
   color: #ff9800;
 }
+
+/* Scanner Controls Styles */
+.scanner-controls {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px auto;
+  max-width: 400px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.scanner-controls h2 {
+  margin-bottom: 15px;
+  text-align: center;
+  color: #fff;
+}
+
+.scanner-controls .form-row {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.scanner-controls .form-row label {
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #bbb;
+}
+
+.scanner-controls .form-row input {
+  padding: 8px 12px;
+  border: 1px solid #444;
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  color: #fff;
+  font-size: 1em;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.scanner-controls .form-row input:focus {
+  border-color: #007bff;
+}
+
+.scanner-controls .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.scanner-controls .btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+  color: #fff;
+}
+
+.scanner-controls .btn-start {
+  background-color: #4caf50;
+}
+
+.scanner-controls .btn-start:hover {
+  background-color: #45a049;
+}
+
+.scanner-controls .btn-pause {
+  background-color: #ff9800;
+}
+
+.scanner-controls .btn-pause:hover {
+  background-color: #fb8c00;
+}
+
+.scanner-controls .btn-resume {
+  background-color: #2196f3;
+}
+
+.scanner-controls .btn-resume:hover {
+  background-color: #1e88e5;
+}
+
+.scanner-controls .btn-stop {
+  background-color: #f44336;
+}
+
+.scanner-controls .btn-stop:hover {
+  background-color: #e53935;
+}
