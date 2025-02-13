@@ -95,16 +95,16 @@ In today's network and IOT landscape, staying on top of your network's status is
 
 The following features are planned for future updates:
 
-[ ] **Database Integration:**  
+- [ ] **Database Integration:**  
    Persist host scan data in a database (e.g., SQLite with SQLAlchemy) so that results are retained across reboots or server restarts.
 
-[ ] **DHCP Flag for Dynamic IPs:**  
+- [ ] **DHCP Flag for Dynamic IPs:**  
    Allow setting a DHCP flag on certain IPs via the GUI so that these entries are refreshed (or removed) automatically after a configurable interval.
 
-[ ] **Hostname Assignment:**  
+- [ ] **Hostname Assignment:**  
    Provide an option in the GUI for users to assign custom hostnames to devices for easier identification.
 
-[ ] **GUI-Based Scanner Control:**  
+- [ ] **GUI-Based Scanner Control:**  
    Add controls in the React dashboard to start, stop, and pause scanning, and allow configuration of scanning parameters (like scan interval and port range) through the GUI.
 
 ## Contributing
