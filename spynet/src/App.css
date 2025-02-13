@@ -1,0 +1,97 @@
+/* App.css */
+.App {
+  background-color: #121212;
+  color: #ffffff;
+  min-height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+}
+
+.App-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.host-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.host-card {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px;
+  width: 250px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.host-card:hover {
+  background-color: #2a2a2a;
+}
+
+.host-card h3 {
+  margin: 0 0 10px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.online {
+  color: #4caf50;
+}
+
+.offline {
+  color: #f44336;
+}
+
+.actions-panel {
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px 0;
+}
+
+.action-group {
+  margin-bottom: 15px;
+}
+
+.action-group input, .action-group select {
+  margin: 5px;
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background-color: #2a2a2a;
+  color: #fff;
+}
+
+.action-group button {
+  margin: 5px;
+  padding: 5px 10px;
+  background-color: #333;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.action-group button:hover {
+  background-color: #444;
+}
+
+.close-btn {
+  background-color: #800000;
+  margin-top: 10px;
+}
+
+.close-btn:hover {
+  background-color: #a00000;
+}
+
+.scanning-indicator {
+  font-style: italic;
+  color: #ff9800;
+}
