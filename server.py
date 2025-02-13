@@ -6,6 +6,11 @@ from flask_socketio import SocketIO
 from scanner import NetworkScanner
 from port_scanner import scan_ports_for_host, grab_banner
 import time
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base, Host
+from datetime import datetime
+from db import db_session
 
 app = Flask(__name__, static_folder='./build', template_folder='./build')
 CORS(app)
