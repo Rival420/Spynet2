@@ -48,10 +48,10 @@ In today's network and IOT landscape, staying on top of your network's status is
 
 4. **Start the Python server:**
 
-   The server requires administrative privileges for raw socket access. Run it with the appropriate network and port range parameters:
+   The server requires administrative privileges for raw socket access.
 
    ```bash
-   sudo ./venv/bin/python server.py --network 192.168.1.0/24 --port-start 1 --port-end 1024
+   sudo ./venv/bin/python server.py
    ```
 
 ### Frontend Setup
@@ -104,7 +104,7 @@ The following features are planned for future updates:
 - [ ] **Hostname Assignment:**  
    Provide an option in the GUI for users to assign custom hostnames to devices for easier identification.
 
-- [ ] **GUI-Based Scanner Control:**  
+- [ x ] **GUI-Based Scanner Control:**  
    Add controls in the React dashboard to start, stop, and pause scanning, and allow configuration of scanning parameters (like scan interval and port range) through the GUI.
 
 ## Contributing
