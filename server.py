@@ -6,8 +6,19 @@ from flask_socketio import SocketIO
 from scanner import NetworkScanner
 from port_scanner import scan_ports_for_host, grab_banner
 import time
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models import Base, Host
+from datetime import datetime
 
 app = Flask(__name__, static_folder='./build', template_folder='./build')
+
+#create db engine and session
+engine = create_engine('sqlite:///spynet.db', echo=False)
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
+db_session = Session()
+
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
