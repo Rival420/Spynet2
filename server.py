@@ -77,29 +77,37 @@ def api_port_scan():
         ports = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 3389, 8000, 8080, 8443, 9000, 9001, 9443]
 
     def run_scan():
-        # Perform the port scan
+        # Mark scanning in progress so that UI shows "Scanning in progress"
+        with scanner.lock:
+            if host in scanner.hosts:
+                scanner.hosts[host]['port_scan_in_progress'] = True
+            else:
+                # In case the host isn't already in our in-memory store
+                scanner.hosts[host] = {
+                    'mac': '',
+                    'vendor': '',
+                    'ports': [],
+                    'status': 'unknown',
+                    'last_seen': time.time(),
+                    'port_scan_in_progress': True
+                }
+        # Emit an update so the frontend sees the change
+        socketio.emit('scan_update', scanner.get_data())
+
+        # Run the port scan
         open_ports = scan_ports_for_host(host, ports, timeout=timeout_val)
-        
-        # Update the in-memory scanner data so the GUI reflects these open ports.
+
+        # Update in-memory data with results and mark scan as complete
         with scanner.lock:
             if host in scanner.hosts:
                 scanner.hosts[host]['ports'] = open_ports
-        
-        # Update the database with the port scan results.
-        from models import Host
-        from db import db_session
-        db_host = db_session.query(Host).filter_by(ip=host).first()
-        if db_host:
-            # Save the ports as a comma-separated string.
-            db_host.port_scan_result = ','.join(str(port) for port in open_ports)
-            db_session.commit()
-        
-        # Emit the results via Socket.IO so any listening clients update immediately.
+                scanner.hosts[host]['port_scan_in_progress'] = False
+        # Optionally, update the database here if desired
+
+        # Emit final results so the UI can update immediately
         socketio.emit('port_scan_result', {'host': host, 'open_ports': open_ports})
-    
-    # Run the scan in a separate thread so the API can return immediately.
+
     threading.Thread(target=run_scan, daemon=True).start()
-    
     return jsonify({"status": "Port scan started", "host": host})
 
 @app.route('/api/command/bannergrab', methods=['POST'])
