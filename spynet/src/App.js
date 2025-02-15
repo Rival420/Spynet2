@@ -16,6 +16,9 @@ function App() {
   const [scanType, setScanType] = useState('popular');
   const [rangeStart, setRangeStart] = useState(1);
   const [rangeEnd, setRangeEnd] = useState(1024);
+  const [updatedHostname, setUpdatedHostname] = useState("");
+  const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
+
 
   useEffect(() => {
     const socket = socketIOClient(ENDPOINT);
@@ -29,8 +32,15 @@ function App() {
   const handleHostClick = (hostIp) => {
     setSelectedHost(hostIp);
     setBannerResult(null);
-    setBannerPort('');
+    setBannerPort("");
+  
+    // Prepopulate with current values from scanData
+    if (scanData[hostIp]) {
+      setUpdatedHostname(scanData[hostIp].hostname || "");
+      setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
+    }
   };
+  
 
   const startPortScan = () => {
     if (!selectedHost) return;
@@ -93,12 +103,32 @@ function App() {
       );
     });
   };
-
+  const updateHostDetails = () => {
+    if (!selectedHost) return;
+    const payload = {
+      ip: selectedHost,
+      hostname: updatedHostname,
+      is_dhcp: updatedIsDhcp
+    };
+    fetch(`${ENDPOINT}/api/host/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("Host updated:", data);
+        // Optionally update scanData locally or wait for next scan_update.
+      })
+      .catch((err) => console.error(err));
+  };
+  
   const renderSelectedHostActions = () => {
     if (!selectedHost) return null;
     return (
       <div className="actions-panel">
         <h2>Actions for {selectedHost}</h2>
+        {/* Existing controls for port scan and banner grabbing here */}
         <div className="action-group">
           <label>Port Scan Type: </label>
           <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
@@ -148,13 +178,35 @@ function App() {
             </div>
           )}
         </div>
+        <div className="action-group">
+          <h3>Update Host Details</h3>
+          <div>
+            <label htmlFor="hostname">Hostname:</label>
+            <input
+              type="text"
+              id="hostname"
+              value={updatedHostname}
+              onChange={(e) => setUpdatedHostname(e.target.value)}
+              placeholder="Enter hostname"
+            />
+          </div>
+          <div>
+            <label htmlFor="dhcpFlag">DHCP:</label>
+            <input
+              type="checkbox"
+              id="dhcpFlag"
+              checked={updatedIsDhcp}
+              onChange={(e) => setUpdatedIsDhcp(e.target.checked)}
+            />
+          </div>
+          <button onClick={updateHostDetails}>Save Details</button>
+        </div>
         <button className="close-btn" onClick={() => setSelectedHost(null)}>
           Close
         </button>
       </div>
     );
   };
-
   return (
     <div className="App">
       <header className="App-header">
