@@ -73,14 +73,33 @@ def api_port_scan():
     elif scan_type == 'all':
         ports = list(range(1, 65536))
     else:
+        # Default/popular ports
         ports = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 3389, 8000, 8080, 8443, 9000, 9001, 9443]
 
-    result = {}
     def run_scan():
+        # Perform the port scan
         open_ports = scan_ports_for_host(host, ports, timeout=timeout_val)
-        result['open_ports'] = open_ports
+        
+        # Update the in-memory scanner data so the GUI reflects these open ports.
+        with scanner.lock:
+            if host in scanner.hosts:
+                scanner.hosts[host]['ports'] = open_ports
+        
+        # Update the database with the port scan results.
+        from models import Host
+        from db import db_session
+        db_host = db_session.query(Host).filter_by(ip=host).first()
+        if db_host:
+            # Save the ports as a comma-separated string.
+            db_host.port_scan_result = ','.join(str(port) for port in open_ports)
+            db_session.commit()
+        
+        # Emit the results via Socket.IO so any listening clients update immediately.
         socketio.emit('port_scan_result', {'host': host, 'open_ports': open_ports})
+    
+    # Run the scan in a separate thread so the API can return immediately.
     threading.Thread(target=run_scan, daemon=True).start()
+    
     return jsonify({"status": "Port scan started", "host": host})
 
 @app.route('/api/command/bannergrab', methods=['POST'])
