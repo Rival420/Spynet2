@@ -21,6 +21,8 @@ class NetworkScanner:
         self.load_from_db() #load persistent data into memory
 
     def start(self, network, port_range, timeout, scan_interval):
+        print(f"[+] Start continious scanning for network: {network} and a total of {len(port_range)} ports.")
+        print(f"[+] the scan will repeat itself every {scan_interval} seconds.")
         self.network = network
         self.port_range = port_range
         self.timeout = timeout
