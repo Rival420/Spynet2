@@ -73,13 +73,40 @@ def api_port_scan():
     elif scan_type == 'all':
         ports = list(range(1, 65536))
     else:
+        # Default/popular ports
         ports = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 3389, 8000, 8080, 8443, 9000, 9001, 9443]
 
-    result = {}
     def run_scan():
+        # Mark scanning in progress so that UI shows "Scanning in progress"
+        with scanner.lock:
+            if host in scanner.hosts:
+                scanner.hosts[host]['port_scan_in_progress'] = True
+            else:
+                # In case the host isn't already in our in-memory store
+                scanner.hosts[host] = {
+                    'mac': '',
+                    'vendor': '',
+                    'ports': [],
+                    'status': 'unknown',
+                    'last_seen': time.time(),
+                    'port_scan_in_progress': True
+                }
+        # Emit an update so the frontend sees the change
+        socketio.emit('scan_update', scanner.get_data())
+
+        # Run the port scan
         open_ports = scan_ports_for_host(host, ports, timeout=timeout_val)
-        result['open_ports'] = open_ports
+
+        # Update in-memory data with results and mark scan as complete
+        with scanner.lock:
+            if host in scanner.hosts:
+                scanner.hosts[host]['ports'] = open_ports
+                scanner.hosts[host]['port_scan_in_progress'] = False
+        # Optionally, update the database here if desired
+
+        # Emit final results so the UI can update immediately
         socketio.emit('port_scan_result', {'host': host, 'open_ports': open_ports})
+
     threading.Thread(target=run_scan, daemon=True).start()
     return jsonify({"status": "Port scan started", "host": host})
 
