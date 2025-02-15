@@ -212,3 +212,57 @@
 .action-group input[type="checkbox"] {
   margin-right: 5px;
 }
+
+.open-ports {
+  font-size: 0.9em;
+  color: #aaa;
+  margin-top: 5px;
+}
+.scanning-indicator {
+  font-style: italic;
+  color: #ff9800;
+}
+
+/* Floating panel styling */
+.floating-panel {
+  position: fixed;
+  background-color: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  width: 300px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  z-index: 1000;
+}
+.floating-panel .action-group {
+  margin-bottom: 15px;
+}
+.floating-panel .action-group input,
+.floating-panel .action-group select {
+  margin: 5px 0;
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background-color: #2a2a2a;
+  color: #fff;
+  width: 100%;
+}
+.floating-panel button {
+  padding: 8px 12px;
+  background-color: #333;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+.floating-panel button:hover {
+  background-color: #444;
+}
+.close-btn {
+  background-color: #800000;
+  margin-top: 10px;
+}
+.close-btn:hover {
+  background-color: #a00000;
+}

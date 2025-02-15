@@ -1,12 +1,10 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import ScannerControls from './ScannerControls';
 import socketIOClient from 'socket.io-client';
+import ScannerControls from './ScannerControls'; // assuming you already have this component
 import './App.css';
 
 const ENDPOINT = 'http://192.168.1.81:5000';
-
-// ScannerControls component to start, pause, resume, and stop scanning.
 
 function App() {
   const [scanData, setScanData] = useState({});
@@ -16,9 +14,11 @@ function App() {
   const [scanType, setScanType] = useState('popular');
   const [rangeStart, setRangeStart] = useState(1);
   const [rangeEnd, setRangeEnd] = useState(1024);
+  // New state to position the floating panel
+  const [floatingPos, setFloatingPos] = useState({ top: 0, left: 0 });
+  // For host details editing
   const [updatedHostname, setUpdatedHostname] = useState("");
   const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
-
 
   useEffect(() => {
     const socket = socketIOClient(ENDPOINT);
@@ -29,18 +29,20 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
-  const handleHostClick = (hostIp) => {
+  // When a host is clicked, record its position so we can show a floating panel nearby.
+  const handleHostClick = (hostIp, event) => {
     setSelectedHost(hostIp);
     setBannerResult(null);
     setBannerPort("");
-  
-    // Prepopulate with current values from scanData
+    // Prepopulate details if available
     if (scanData[hostIp]) {
       setUpdatedHostname(scanData[hostIp].hostname || "");
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
+    // Position the floating panel relative to the clicked host card.
+    const rect = event.currentTarget.getBoundingClientRect();
+    setFloatingPos({ top: rect.top, left: rect.right + 10 });
   };
-  
 
   const startPortScan = () => {
     if (!selectedHost) return;
@@ -58,11 +60,11 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Port scan started:', data);
-    })
-    .catch((err) => console.error('Error starting port scan:', err));
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Port scan started:', data);
+      })
+      .catch((err) => console.error('Error starting port scan:', err));
   };
 
   const startBannerGrab = () => {
@@ -77,32 +79,14 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Banner grab result:', data);
-      setBannerResult(data.banner);
-    })
-    .catch((err) => console.error('Error during banner grab:', err));
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Banner grab result:', data);
+        setBannerResult(data.banner);
+      })
+      .catch((err) => console.error('Error during banner grab:', err));
   };
 
-  const renderHosts = () => {
-    return Object.keys(scanData).map((ip) => {
-      const host = scanData[ip];
-      return (
-        <div key={ip} className="host-card" onClick={() => handleHostClick(ip)}>
-          <h3>
-            {ip} <span className={host.status}>{host.status}</span>
-          </h3>
-          <p>MAC: {host.mac}</p>
-          <p>Vendor: {host.vendor}</p>
-          <p>Open Ports: {host.ports ? host.ports.length : 0}</p>
-          {host.port_scan_in_progress && (
-            <p className="scanning-indicator">Port scan in progress...</p>
-          )}
-        </div>
-      );
-    });
-  };
   const updateHostDetails = () => {
     if (!selectedHost) return;
     const payload = {
@@ -118,17 +102,46 @@ function App() {
       .then((res) => res.json())
       .then((data) => {
         console.log("Host updated:", data);
-        // Optionally update scanData locally or wait for next scan_update.
+        // Optionally update scanData locally.
       })
       .catch((err) => console.error(err));
   };
-  
+
+  const renderHosts = () => {
+    return Object.keys(scanData).map((ip) => {
+      const host = scanData[ip];
+      return (
+        <div
+          key={ip}
+          className="host-card"
+          onClick={(e) => handleHostClick(ip, e)}
+        >
+          <h3>
+            {ip} <span className={host.status}>{host.status}</span>
+          </h3>
+          <p>MAC: {host.mac}</p>
+          <p>Vendor: {host.vendor}</p>
+          {/* Now, show open ports right in the host card */}
+          <p className="open-ports">
+            Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : 'None'}
+          </p>
+          {host.port_scan_in_progress && (
+            <p className="scanning-indicator">Scanning in progress...</p>
+          )}
+        </div>
+      );
+    });
+  };
+
+  // Render a floating panel that appears next to the selected host.
   const renderSelectedHostActions = () => {
     if (!selectedHost) return null;
     return (
-      <div className="actions-panel">
+      <div
+        className="floating-panel"
+        style={{ top: floatingPos.top, left: floatingPos.left }}
+      >
         <h2>Actions for {selectedHost}</h2>
-        {/* Existing controls for port scan and banner grabbing here */}
         <div className="action-group">
           <label>Port Scan Type: </label>
           <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
@@ -153,14 +166,6 @@ function App() {
             </>
           )}
           <button onClick={startPortScan}>Start Port Scan</button>
-        </div>
-        <div className="action-group">
-          <h3>Port Scan Result:</h3>
-          <p>
-            {scanData[selectedHost] && scanData[selectedHost].ports
-              ? scanData[selectedHost].ports.join(', ')
-              : 'No data yet'}
-          </p>
         </div>
         <div className="action-group">
           <h3>Banner Grabbing</h3>
@@ -207,6 +212,7 @@ function App() {
       </div>
     );
   };
+
   return (
     <div className="App">
       <header className="App-header">
