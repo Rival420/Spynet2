@@ -7,6 +7,7 @@ from models import Host
 from sqlalchemy.orm.exc import NoResultFound
 from datetime import datetime
 from db import db_session  # Import the db_session from server.py
+from helper import filter_numeric_ports
 
 class NetworkScanner:
     def __init__(self):
@@ -90,8 +91,21 @@ class NetworkScanner:
             open_ports = scan_ports_for_host(ip, ports, timeout=self.timeout)
             with self.lock:
                 if ip in self.hosts:
-                    self.hosts[ip]['ports'] = open_ports
+                    # Convert both existing ports and new scan result into sets of numeric values.
+                    existing_ports = filter_numeric_ports(self.hosts[ip].get('ports', []))
+                    new_ports = filter_numeric_ports(open_ports)
+                    
+                    # If the new scan returned any ports, merge them with existing ones.
+                    if new_ports:
+                        merged_ports = sorted(existing_ports.union(new_ports))
+                        self.hosts[ip]['ports'] = merged_ports
+                    else:
+                        # If the new scan returns an empty list and there are already ports recorded,
+                        # keep the existing port list intact.
+                        if not existing_ports:
+                            self.hosts[ip]['ports'] = []  # if none exist, assign an empty list
                     self.hosts[ip]['port_scan_in_progress'] = False
+
 
     def pause(self):
         print("[+] Pausing the scan")
