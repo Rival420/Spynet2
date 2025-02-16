@@ -122,9 +122,9 @@ function App() {
       return (
         <div key={ip} className="host-card" onClick={(e) => handleHostClick(ip, e)}>
           <h3>
-            {ip} {host.hostname ? ` - ${host.hostname}` : ""}{" "}
-            <span className={host.status}>{host.status}</span>
+            {ip} <span className={host.status}>{host.status}</span>
           </h3>
+          <p>Hostname: {host.hostname ? `${host.hostname}` : ""}{" "}</p>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
           <p className="open-ports">
