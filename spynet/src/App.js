@@ -124,9 +124,13 @@ function App() {
           <h3>
             {ip} <span className={host.status}>{host.status}</span>
           </h3>
-          <h4>{host.hostname ? `Hostname: ${host.hostname}` : ""}{" "}</h4>
+          <h4>{host.hostname ? `Hostname: ${host.hostname}` : ""}</h4>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
+          {/* Display DHCP flag */}
+          <p className="dhcp-flag">
+            Type: {host.is_dhcp ? "DHCP" : "Static"}
+          </p>
           <p className="open-ports">
             Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : "None"}
           </p>
