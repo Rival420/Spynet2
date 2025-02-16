@@ -98,10 +98,10 @@ The following features are planned for future updates:
 - [x] **Database Integration:**  
    Persist host scan data in a database (e.g., SQLite with SQLAlchemy) so that results are retained across reboots or server restarts.
 
-- [ ] **DHCP Flag for Dynamic IPs:**  
+- [x] **DHCP Flag for Dynamic IPs:**  
    Allow setting a DHCP flag on certain IPs via the GUI so that these entries are refreshed (or removed) automatically after a configurable interval.
 
-- [ ] **Hostname Assignment:**  
+- [x] **Hostname Assignment:**  
    Provide an option in the GUI for users to assign custom hostnames to devices for easier identification.
 
 - [x] **GUI-Based Scanner Control:**  
