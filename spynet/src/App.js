@@ -106,17 +106,29 @@ function App() {
   };
 
   const renderHosts = () => {
-    return Object.keys(scanData).map((ip) => {
+    // Sort IPs numerically in ascending order.
+    const sortedIps = Object.keys(scanData).sort((a, b) => {
+      const ipA = a.split('.').map(Number);
+      const ipB = b.split('.').map(Number);
+      for (let i = 0; i < Math.max(ipA.length, ipB.length); i++) {
+        if ((ipA[i] || 0) < (ipB[i] || 0)) return -1;
+        if ((ipA[i] || 0) > (ipB[i] || 0)) return 1;
+      }
+      return 0;
+    });
+  
+    return sortedIps.map((ip) => {
       const host = scanData[ip];
       return (
         <div key={ip} className="host-card" onClick={(e) => handleHostClick(ip, e)}>
           <h3>
-            {ip} <span className={host.status}>{host.status}</span>
+            {ip} {host.hostname ? ` - ${host.hostname}` : ""}{" "}
+            <span className={host.status}>{host.status}</span>
           </h3>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
           <p className="open-ports">
-            Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : 'None'}
+            Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : "None"}
           </p>
           {host.port_scan_in_progress && (
             <p className="scanning-indicator">Scanning in progress...</p>
@@ -125,6 +137,7 @@ function App() {
       );
     });
   };
+  
 
   // Floating panel for host actions
   const renderSelectedHostActions = () => {
