@@ -11,11 +11,10 @@ class Host(Base):
     ip = Column(String, unique=True, nullable=False)
     mac = Column(String, nullable=False)
     vendor = Column(String, default="Unknown")
-    hostname = Column(String, default="")        # For custom naming later
-    dns_name = Column(String, default="") # to add a dns name as well
+    hostname = Column(String, default="")        # Custom hostname
     is_dhcp = Column(Boolean, default=False)       # DHCP flag
     last_seen = Column(DateTime, default=datetime.utcnow)
-    port_scan_result = Column(String, default="")  # e.g. comma-separated open ports
+    port_scan_result = Column(String, default="")  # e.g., comma-separated list of ports
 
     def __repr__(self):
-        return f"<Host(ip={self.ip}, mac={self.mac}, vendor={self.vendor}, last_seen={self.last_seen})>"
+        return f"<Host(ip={self.ip}, mac={self.mac}, vendor={self.vendor}, hostname={self.hostname}, is_dhcp={self.is_dhcp})>"

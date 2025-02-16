@@ -32,6 +32,7 @@ def scan_ports_for_host(host, ports, timeout=1):
     threads = []
     lock = threading.Lock()
 
+    print(f"[+] Starting port scan on host: {host}")
     def scan_port(port):
         if syn_scan(host, port, timeout):
             with lock:
@@ -49,6 +50,7 @@ def grab_banner(host, port, timeout=2):
     """
     Attempts to connect to host:port and read a banner.
     """
+    print(f"[+] Grabbing port {port} for host {host}")
     try:
         s = socket.socket()
         s.settimeout(timeout)

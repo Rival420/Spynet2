@@ -36,6 +36,7 @@ class NetworkScanner:
             if not self.scanning_paused:
                 self.scan_once()
             time.sleep(self.scan_interval)
+            print(f"[+] Sleep timer ended. Starting loop again.")
 
     def scan_once(self):
         live_hosts = arp_scan(self.network, timeout=self.timeout)

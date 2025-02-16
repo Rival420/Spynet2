@@ -1,12 +1,10 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import ScannerControls from './ScannerControls';
 import socketIOClient from 'socket.io-client';
+import Sidebar from './Sidebar';
 import './App.css';
 
 const ENDPOINT = 'http://192.168.1.81:5000';
-
-// ScannerControls component to start, pause, resume, and stop scanning.
 
 function App() {
   const [scanData, setScanData] = useState({});
@@ -16,6 +14,11 @@ function App() {
   const [scanType, setScanType] = useState('popular');
   const [rangeStart, setRangeStart] = useState(1);
   const [rangeEnd, setRangeEnd] = useState(1024);
+  // State to position the floating panel next to the host card
+  const [floatingPos, setFloatingPos] = useState({ top: 0, left: 0 });
+  // For host details editing
+  const [updatedHostname, setUpdatedHostname] = useState("");
+  const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
 
   useEffect(() => {
     const socket = socketIOClient(ENDPOINT);
@@ -26,10 +29,18 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
-  const handleHostClick = (hostIp) => {
+  // When a host is clicked, record its position and prepopulate details
+  const handleHostClick = (hostIp, event) => {
     setSelectedHost(hostIp);
-    setBannerResult(null);
+    setBannerResult('');
     setBannerPort('');
+    if (scanData[hostIp]) {
+      setUpdatedHostname(scanData[hostIp].hostname || "");
+      setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    // Position floating panel to the right of the clicked card with a small offset.
+    setFloatingPos({ top: rect.top, left: rect.right + 10 });
   };
 
   const startPortScan = () => {
@@ -48,11 +59,11 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Port scan started:', data);
-    })
-    .catch((err) => console.error('Error starting port scan:', err));
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Port scan started:', data);
+      })
+      .catch((err) => console.error('Error starting port scan:', err));
   };
 
   const startBannerGrab = () => {
@@ -67,40 +78,62 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     })
-    .then((response) => response.json())
-    .then((data) => {
-      console.log('Banner grab result:', data);
-      setBannerResult(data.banner);
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Banner grab result:', data);
+        setBannerResult(data.banner);
+      })
+      .catch((err) => console.error('Error during banner grab:', err));
+  };
+
+  const updateHostDetails = () => {
+    if (!selectedHost) return;
+    const payload = {
+      ip: selectedHost,
+      hostname: updatedHostname,
+      is_dhcp: updatedIsDhcp
+    };
+    fetch(`${ENDPOINT}/api/host/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     })
-    .catch((err) => console.error('Error during banner grab:', err));
+      .then((res) => res.json())
+      .then((data) => {
+        console.log('Host updated:', data);
+      })
+      .catch((err) => console.error(err));
   };
 
   const renderHosts = () => {
     return Object.keys(scanData).map((ip) => {
       const host = scanData[ip];
       return (
-        <div key={ip} className="host-card" onClick={() => handleHostClick(ip)}>
+        <div key={ip} className="host-card" onClick={(e) => handleHostClick(ip, e)}>
           <h3>
             {ip} <span className={host.status}>{host.status}</span>
           </h3>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
-          <p>Open Ports: {host.ports ? host.ports.length : 0}</p>
+          <p className="open-ports">
+            Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : 'None'}
+          </p>
           {host.port_scan_in_progress && (
-            <p className="scanning-indicator">Port scan in progress...</p>
+            <p className="scanning-indicator">Scanning in progress...</p>
           )}
         </div>
       );
     });
   };
 
+  // Floating panel for host actions
   const renderSelectedHostActions = () => {
     if (!selectedHost) return null;
     return (
-      <div className="actions-panel">
+      <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
         <h2>Actions for {selectedHost}</h2>
         <div className="action-group">
-          <label>Port Scan Type: </label>
+          <label>Port Scan Type:</label>
           <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
             <option value="popular">Popular Ports</option>
             <option value="range">Range</option>
@@ -108,38 +141,15 @@ function App() {
           </select>
           {scanType === 'range' && (
             <>
-              <input
-                type="number"
-                placeholder="Start Port"
-                value={rangeStart}
-                onChange={(e) => setRangeStart(e.target.value)}
-              />
-              <input
-                type="number"
-                placeholder="End Port"
-                value={rangeEnd}
-                onChange={(e) => setRangeEnd(e.target.value)}
-              />
+              <input type="number" placeholder="Start Port" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+              <input type="number" placeholder="End Port" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
             </>
           )}
           <button onClick={startPortScan}>Start Port Scan</button>
         </div>
         <div className="action-group">
-          <h3>Port Scan Result:</h3>
-          <p>
-            {scanData[selectedHost] && scanData[selectedHost].ports
-              ? scanData[selectedHost].ports.join(', ')
-              : 'No data yet'}
-          </p>
-        </div>
-        <div className="action-group">
           <h3>Banner Grabbing</h3>
-          <input
-            type="number"
-            placeholder="Port for banner grab"
-            value={bannerPort}
-            onChange={(e) => setBannerPort(e.target.value)}
-          />
+          <input type="number" placeholder="Port for banner grab" value={bannerPort} onChange={(e) => setBannerPort(e.target.value)} />
           <button onClick={startBannerGrab}>Grab Banner</button>
           {bannerResult && (
             <div>
@@ -148,23 +158,35 @@ function App() {
             </div>
           )}
         </div>
-        <button className="close-btn" onClick={() => setSelectedHost(null)}>
-          Close
-        </button>
+        <div className="action-group">
+          <h3>Update Host Details</h3>
+          <div>
+            <label htmlFor="hostname">Hostname:</label>
+            <input type="text" id="hostname" value={updatedHostname} onChange={(e) => setUpdatedHostname(e.target.value)} placeholder="Enter hostname" />
+          </div>
+          <div>
+            <label htmlFor="dhcpFlag">DHCP:</label>
+            <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
+          </div>
+          <button onClick={updateHostDetails}>Save Details</button>
+        </div>
+        <button className="close-btn" onClick={() => setSelectedHost(null)}>Close</button>
       </div>
     );
   };
 
   return (
     <div className="App">
-      <header className="App-header">
-        <h1>Spynet Dashboard</h1>
-      </header>
-      <ScannerControls endpoint={ENDPOINT} />
-      <main>
-        <div className="host-list">{renderHosts()}</div>
-        {renderSelectedHostActions()}
-      </main>
+      <Sidebar endpoint={ENDPOINT} />
+      <div className="main-content" style={{ marginLeft: '300px', padding: '20px' }}>
+        <header className="App-header">
+          <h1>Spynet Dashboard</h1>
+        </header>
+        <main>
+          <div className="host-list">{renderHosts()}</div>
+          {renderSelectedHostActions()}
+        </main>
+      </div>
     </div>
   );
 }

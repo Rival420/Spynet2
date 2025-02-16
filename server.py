@@ -115,11 +115,43 @@ def api_banner_grab():
     data = request.get_json()
     host = data.get('host')
     port = data.get('port')
-    timeout_val = data.get('timeout', 2)
+    timeout_val = data.get('timeout', 5)
     if not host or not port:
         return jsonify({"error": "host and port are required"}), 400
     banner = grab_banner(host, int(port), timeout=timeout_val)
     return jsonify({"host": host, "port": port, "banner": banner})
+
+@app.route('/api/host/update', methods=['POST'])
+def update_host():
+    data = request.get_json()
+    ip = data.get('ip')
+    hostname = data.get('hostname')
+    is_dhcp = data.get('is_dhcp')
+    if not ip:
+        return jsonify({"error": "IP is required"}), 400
+
+    # Query the host from the database.
+    from models import Host
+    db_host = db_session.query(Host).filter_by(ip=ip).first()
+    if not db_host:
+        return jsonify({"error": "Host not found"}), 404
+
+    if hostname is not None:
+        db_host.hostname = hostname
+    if is_dhcp is not None:
+        db_host.is_dhcp = bool(is_dhcp)
+
+    db_session.commit()
+
+    # Also update the in-memory data, if available.
+    if ip in scanner.hosts:
+        if hostname is not None:
+            scanner.hosts[ip]['hostname'] = hostname
+        if is_dhcp is not None:
+            scanner.hosts[ip]['is_dhcp'] = bool(is_dhcp)
+
+    return jsonify({"status": "Host updated", "ip": ip, "hostname": db_host.hostname, "is_dhcp": db_host.is_dhcp})
+
 
 def background_thread():
     while True:
