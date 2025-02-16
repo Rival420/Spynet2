@@ -124,7 +124,7 @@ function App() {
           <h3>
             {ip} <span className={host.status}>{host.status}</span>
           </h3>
-          <p>{host.hostname ? `Hostname: ${host.hostname}` : ""}{" "}</p>
+          <h4>{host.hostname ? `Hostname: ${host.hostname}` : ""}{" "}</h4>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
           <p className="open-ports">
