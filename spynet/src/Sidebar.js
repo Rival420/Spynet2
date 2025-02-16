@@ -67,7 +67,7 @@ function Sidebar({ endpoint }) {
   return (
     <div className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
       <button className="toggle-btn" onClick={toggleCollapse}>
-        {isCollapsed ? ">>" : "<<"}
+        <span className="burger-icon">☰</span>
       </button>
       {!isCollapsed && (
         <div className="controls">

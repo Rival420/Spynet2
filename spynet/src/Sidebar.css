@@ -1,5 +1,4 @@
 /* Sidebar.css */
-
 .sidebar {
     position: fixed;
     top: 0;
@@ -22,19 +21,22 @@
   .toggle-btn {
     position: absolute;
     top: 10px;
-    right: -25px;
-    background-color: #333;
+    left: 10px;
+    background: none;
     border: none;
-    color: #fff;
-    width: 25px;
-    height: 25px;
     cursor: pointer;
-    border-radius: 3px;
+    font-size: 24px;
+    color: #fff;
     outline: none;
   }
   
+  .burger-icon {
+    /* Optional: additional styling for the burger icon */
+    font-size: 24px;
+  }
+  
   .controls {
-    margin-top: 40px; /* space for toggle button */
+    margin-top: 50px; /* leave space for the toggle button */
   }
   
   .form-row {
@@ -57,6 +59,11 @@
     color: #fff;
     font-size: 1em;
     outline: none;
+    transition: border-color 0.3s;
+  }
+  
+  .form-row input:focus {
+    border-color: #007bff;
   }
   
   .button-group {
@@ -72,8 +79,9 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
-    color: #fff;
+    font-weight: bold;
     transition: background-color 0.3s ease;
+    color: #fff;
   }
   
   .btn-start {
