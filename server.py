@@ -115,7 +115,7 @@ def api_banner_grab():
     data = request.get_json()
     host = data.get('host')
     port = data.get('port')
-    timeout_val = data.get('timeout', 2)
+    timeout_val = data.get('timeout', 5)
     if not host or not port:
         return jsonify({"error": "host and port are required"}), 400
     banner = grab_banner(host, int(port), timeout=timeout_val)
