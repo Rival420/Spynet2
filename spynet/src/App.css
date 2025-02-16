@@ -266,3 +266,8 @@
 .close-btn:hover {
   background-color: #a00000;
 }
+.dhcp-flag {
+  font-size: 0.9em;
+  color: #bbb;
+  margin: 5px 0;
+}
