@@ -95,7 +95,7 @@ In today's network and IOT landscape, staying on top of your network's status is
 
 The following features are planned for future updates:
 
-- [ ] **Database Integration:**  
+- [x] **Database Integration:**  
    Persist host scan data in a database (e.g., SQLite with SQLAlchemy) so that results are retained across reboots or server restarts.
 
 - [ ] **DHCP Flag for Dynamic IPs:**  
