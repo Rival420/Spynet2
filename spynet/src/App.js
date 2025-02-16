@@ -38,10 +38,18 @@ function App() {
       setUpdatedHostname(scanData[hostIp].hostname || "");
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    // Position floating panel to the right of the clicked card with a small offset.
-    setFloatingPos({ top: rect.top, left: rect.right + 10 });
+    // Get the bounding rectangle for the clicked card
+    const cardRect = event.currentTarget.getBoundingClientRect();
+    // Get the bounding rectangle for the main-content container
+    const mainContent = document.querySelector('.main-content');
+    const mainRect = mainContent.getBoundingClientRect();
+    // Set the floating panel position relative to main-content
+    setFloatingPos({
+      top: cardRect.top - mainRect.top,
+      left: cardRect.right - mainRect.left + 10,
+    });
   };
+  
 
   const startPortScan = () => {
     if (!selectedHost) return;
@@ -143,54 +151,80 @@ function App() {
   };
   
 
-  // Floating panel for host actions
-  const renderSelectedHostActions = () => {
-    if (!selectedHost) return null;
-    return (
-      <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
-        <h2>Actions for {selectedHost}</h2>
-        <div className="action-group">
-          <label>Port Scan Type:</label>
-          <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
-            <option value="popular">Popular Ports</option>
-            <option value="range">Range</option>
-            <option value="all">All Ports</option>
-          </select>
-          {scanType === 'range' && (
-            <>
-              <input type="number" placeholder="Start Port" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
-              <input type="number" placeholder="End Port" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
-            </>
-          )}
-          <button onClick={startPortScan}>Start Port Scan</button>
-        </div>
-        <div className="action-group">
-          <h3>Banner Grabbing</h3>
-          <input type="number" placeholder="Port for banner grab" value={bannerPort} onChange={(e) => setBannerPort(e.target.value)} />
-          <button onClick={startBannerGrab}>Grab Banner</button>
-          {bannerResult && (
-            <div>
-              <h4>Banner:</h4>
-              <p>{bannerResult}</p>
-            </div>
-          )}
-        </div>
-        <div className="action-group">
-          <h3>Update Host Details</h3>
-          <div>
-            <label htmlFor="hostname">Hostname:</label>
-            <input type="text" id="hostname" value={updatedHostname} onChange={(e) => setUpdatedHostname(e.target.value)} placeholder="Enter hostname" />
-          </div>
-          <div>
-            <label htmlFor="dhcpFlag">DHCP:</label>
-            <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
-          </div>
-          <button onClick={updateHostDetails}>Save Details</button>
-        </div>
-        <button className="close-btn" onClick={() => setSelectedHost(null)}>Close</button>
+// Floating panel for host actions
+const renderSelectedHostActions = () => {
+  if (!selectedHost) return null;
+  return (
+    <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
+      <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
+      <h2>Actions for {selectedHost}</h2>
+      <div className="action-group">
+        <label>Port Scan Type:</label>
+        <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
+          <option value="popular">Popular Ports</option>
+          <option value="range">Range</option>
+          <option value="all">All Ports</option>
+        </select>
+        {scanType === 'range' && (
+          <>
+            <input 
+              type="number" 
+              placeholder="Start Port" 
+              value={rangeStart} 
+              onChange={(e) => setRangeStart(e.target.value)} 
+            />
+            <input 
+              type="number" 
+              placeholder="End Port" 
+              value={rangeEnd} 
+              onChange={(e) => setRangeEnd(e.target.value)} 
+            />
+          </>
+        )}
+        <button onClick={startPortScan}>Start Port Scan</button>
       </div>
-    );
-  };
+      <div className="action-group">
+        <h3>Banner Grabbing</h3>
+        <input 
+          type="number" 
+          placeholder="Port for banner grab" 
+          value={bannerPort} 
+          onChange={(e) => setBannerPort(e.target.value)} 
+        />
+        <button onClick={startBannerGrab}>Grab Banner</button>
+        {bannerResult && (
+          <div>
+            <h4>Banner:</h4>
+            <p>{bannerResult}</p>
+          </div>
+        )}
+      </div>
+      <div className="action-group">
+        <h3>Update Host Details</h3>
+        <div>
+          <label htmlFor="hostname">Hostname:</label>
+          <input 
+            type="text" 
+            id="hostname" 
+            value={updatedHostname} 
+            onChange={(e) => setUpdatedHostname(e.target.value)} 
+            placeholder="Enter hostname" 
+          />
+        </div>
+        <div>
+          <label htmlFor="dhcpFlag">DHCP:</label>
+          <input 
+            type="checkbox" 
+            id="dhcpFlag" 
+            checked={updatedIsDhcp} 
+            onChange={(e) => setUpdatedIsDhcp(e.target.checked)} 
+          />
+        </div>
+        <button onClick={updateHostDetails}>Save Details</button>
+      </div>
+    </div>
+  );
+};
 
   return (
     <div className="App">

@@ -223,9 +223,16 @@
   color: #ff9800;
 }
 
+/* Main content container – ensure it’s positioned relative */
+.main-content {
+  position: relative;
+  margin-left: 300px; /* adjust if needed */
+  padding: 20px;
+}
+
 /* Floating panel styling */
 .floating-panel {
-  position: fixed;
+  position: absolute; /* now relative to .main-content */
   background-color: #1e1e1e;
   border: 1px solid #333;
   border-radius: 8px;
@@ -233,10 +240,28 @@
   width: 300px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   z-index: 1000;
+  max-height: 90vh;   /* so it never exceeds the viewport height */
+  overflow-y: auto;   /* scroll internally if content is long */
 }
+
+/* Close button: red cross in the top-right corner of the floating panel */
+.floating-panel .close-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  color: red;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Floating panel form elements */
 .floating-panel .action-group {
   margin-bottom: 15px;
 }
+
 .floating-panel .action-group input,
 .floating-panel .action-group select {
   margin: 5px 0;
@@ -247,6 +272,7 @@
   color: #fff;
   width: 100%;
 }
+
 .floating-panel button {
   padding: 8px 12px;
   background-color: #333;
@@ -256,9 +282,12 @@
   cursor: pointer;
   margin-top: 10px;
 }
+
 .floating-panel button:hover {
   background-color: #444;
 }
+
+
 .close-btn {
   background-color: #800000;
   margin-top: 10px;
