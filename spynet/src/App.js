@@ -38,10 +38,18 @@ function App() {
       setUpdatedHostname(scanData[hostIp].hostname || "");
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    // Position floating panel to the right of the clicked card with a small offset.
-    setFloatingPos({ top: rect.top, left: rect.right + 10 });
+    // Get the bounding rectangle for the clicked card
+    const cardRect = event.currentTarget.getBoundingClientRect();
+    // Get the bounding rectangle for the main-content container
+    const mainContent = document.querySelector('.main-content');
+    const mainRect = mainContent.getBoundingClientRect();
+    // Set the floating panel position relative to main-content
+    setFloatingPos({
+      top: cardRect.top - mainRect.top,
+      left: cardRect.right - mainRect.left + 10,
+    });
   };
+  
 
   const startPortScan = () => {
     if (!selectedHost) return;
