@@ -50,14 +50,19 @@ class NetworkScanner:
                 # Update database: try to find an existing record.
                 db_host = db_session.query(Host).filter_by(ip=ip).first()
                 if db_host:
+                    # Only update fields provided by ARP scan.
                     db_host.mac = host['mac']
                     db_host.vendor = host['vendor']
                     db_host.last_seen = datetime.utcnow()
+                    # Do NOT update hostname and is_dhcp (manual fields)
                 else:
                     db_host = Host(ip=ip,
                                    mac=host['mac'],
                                    vendor=host['vendor'],
-                                   last_seen=datetime.utcnow())
+                                   last_seen=datetime.utcnow(),
+                                   hostname="", #default empty, can be manually updated later
+                                   is_dhcp=False #default False
+                    )
                     db_session.add(db_host)
                 db_session.commit()
 
@@ -69,13 +74,16 @@ class NetworkScanner:
                         'ports': [],
                         'status': 'online',
                         'last_seen': time.time(),
-                        'port_scan_in_progress': False
+                        'port_scan_in_progress': False,
+                        'hostname': db_host.hostname,
+                        'is_dhcp': db_host.is_dhcp
                     }
                 else:
                     self.hosts[ip]['mac'] = host['mac']
                     self.hosts[ip]['vendor'] = host['vendor']
                     self.hosts[ip]['status'] = 'online'
                     self.hosts[ip]['last_seen'] = time.time()
+                    # hostname and is_dhcp remainds as they are
 
             # Mark hosts not seen in this ARP scan as offline
             for ip in list(self.hosts.keys()):
@@ -104,7 +112,10 @@ class NetworkScanner:
                             # Save as a comma-separated string.
                             db_host.port_scan_result = ','.join(map(str, merged_ports))
                             db_session.commit()
-                    # If new_ports is empty but there are already ports stored, do nothing.
+                    else:
+                        # If new scan returns empty and we already have ports, leave them intact.
+                        if not existing_ports:
+                            self.hosts[ip]['ports'] = []
                     self.hosts[ip]['port_scan_in_progress'] = False
 
 
