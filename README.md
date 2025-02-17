@@ -107,6 +107,16 @@ The following features are planned for future updates:
 - [x] **GUI-Based Scanner Control:**  
    Add controls in the React dashboard to start, stop, and pause scanning, and allow configuration of scanning parameters (like scan interval and port range) through the GUI.
 
+- [ ] **Fix Database fields to be persistent:**  
+   Some fields are not being correctly saved in the database which results in loss of info on a device when the service restarts.
+   examples: DHCP flag, hostname, open ports
+
+- [ ] **UI Improvements:**  
+   I want the offline hosts to be available in another list and with a switch hide or show them
+
+- [ ] **Floating menu fix:**  
+   The Floating menu is working better but still up for some improvements for better UI experience. 
+
 ## Contributing
 
 Contributions are welcome! Feel free to fork the repository, open issues, or submit pull requests.
