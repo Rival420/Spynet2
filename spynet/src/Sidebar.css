@@ -116,3 +116,15 @@
     background-color: #e53935;
   }
   
+  .filter-controls {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .filter-controls label {
+    color: #fff;
+    font-size: 0.9em;
+    margin-bottom: 5px;
+  }
+  

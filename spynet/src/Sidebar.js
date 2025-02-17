@@ -2,15 +2,12 @@
 import React, { useState } from 'react';
 import './Sidebar.css';
 
-function Sidebar({ endpoint }) {
-  // State for the scanning controls:
+function Sidebar({ endpoint, hideOffline, hideDhcp, setHideOffline, setHideDhcp }) {
   const [network, setNetwork] = useState("");
   const [portStart, setPortStart] = useState(1);
   const [portEnd, setPortEnd] = useState(1024);
   const [timeout, setTimeoutValue] = useState(2);
   const [interval, setIntervalValue] = useState(60);
-
-  // State for sidebar collapse/expand:
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleCollapse = () => {
@@ -21,13 +18,7 @@ function Sidebar({ endpoint }) {
     fetch(`${endpoint}/api/scanner/start`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        network,
-        port_start: portStart,
-        port_end: portEnd,
-        timeout,
-        interval,
-      }),
+      body: JSON.stringify({ network, port_start: portStart, port_end: portEnd, timeout, interval })
     })
       .then((res) => res.json())
       .then((data) => console.log("Scanner started", data))
@@ -37,7 +28,7 @@ function Sidebar({ endpoint }) {
   const pauseScanner = () => {
     fetch(`${endpoint}/api/scanner/pause`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" }
     })
       .then((res) => res.json())
       .then((data) => console.log("Scanner paused", data))
@@ -47,7 +38,7 @@ function Sidebar({ endpoint }) {
   const resumeScanner = () => {
     fetch(`${endpoint}/api/scanner/resume`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" }
     })
       .then((res) => res.json())
       .then((data) => console.log("Scanner resumed", data))
@@ -57,7 +48,7 @@ function Sidebar({ endpoint }) {
   const stopScanner = () => {
     fetch(`${endpoint}/api/scanner/stop`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" }
     })
       .then((res) => res.json())
       .then((data) => console.log("Scanner stopped", data))
@@ -131,6 +122,24 @@ function Sidebar({ endpoint }) {
             <button className="btn btn-stop" onClick={stopScanner}>
               Stop
             </button>
+          </div>
+          <div className="filter-controls">
+            <label>
+              <input
+                type="checkbox"
+                checked={hideOffline}
+                onChange={(e) => setHideOffline(e.target.checked)}
+              />
+              Hide Offline Hosts
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={hideDhcp}
+                onChange={(e) => setHideDhcp(e.target.checked)}
+              />
+              Hide DHCP Hosts
+            </label>
           </div>
         </div>
       )}

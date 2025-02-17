@@ -14,11 +14,13 @@ function App() {
   const [scanType, setScanType] = useState('popular');
   const [rangeStart, setRangeStart] = useState(1);
   const [rangeEnd, setRangeEnd] = useState(1024);
-  // State to position the floating panel next to the host card
   const [floatingPos, setFloatingPos] = useState({ top: 0, left: 0 });
-  // For host details editing
   const [updatedHostname, setUpdatedHostname] = useState("");
   const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
+
+  // New filtering state:
+  const [hideOffline, setHideOffline] = useState(false);
+  const [hideDhcp, setHideDhcp] = useState(false);
 
   useEffect(() => {
     const socket = socketIOClient(ENDPOINT);
@@ -29,7 +31,6 @@ function App() {
     return () => socket.disconnect();
   }, []);
 
-  // When a host is clicked, record its position and prepopulate details
   const handleHostClick = (hostIp, event) => {
     setSelectedHost(hostIp);
     setBannerResult('');
@@ -38,18 +39,15 @@ function App() {
       setUpdatedHostname(scanData[hostIp].hostname || "");
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
-    // Get the bounding rectangle for the clicked card
-    const cardRect = event.currentTarget.getBoundingClientRect();
-    // Get the bounding rectangle for the main-content container
+    const rect = event.currentTarget.getBoundingClientRect();
+    // Compute floating panel position relative to the main-content container.
     const mainContent = document.querySelector('.main-content');
     const mainRect = mainContent.getBoundingClientRect();
-    // Set the floating panel position relative to main-content
     setFloatingPos({
-      top: cardRect.top - mainRect.top,
-      left: cardRect.right - mainRect.left + 10,
+      top: rect.top - mainRect.top,
+      left: rect.right - mainRect.left + 10,
     });
   };
-  
 
   const startPortScan = () => {
     if (!selectedHost) return;
@@ -68,9 +66,7 @@ function App() {
       body: JSON.stringify(payload)
     })
       .then((response) => response.json())
-      .then((data) => {
-        console.log('Port scan started:', data);
-      })
+      .then((data) => console.log('Port scan started:', data))
       .catch((err) => console.error('Error starting port scan:', err));
   };
 
@@ -107,14 +103,12 @@ function App() {
       body: JSON.stringify(payload)
     })
       .then((res) => res.json())
-      .then((data) => {
-        console.log('Host updated:', data);
-      })
+      .then((data) => console.log('Host updated:', data))
       .catch((err) => console.error(err));
   };
 
   const renderHosts = () => {
-    // Sort IPs numerically in ascending order.
+    // Sort IP addresses numerically in ascending order.
     const sortedIps = Object.keys(scanData).sort((a, b) => {
       const ipA = a.split('.').map(Number);
       const ipB = b.split('.').map(Number);
@@ -124,8 +118,16 @@ function App() {
       }
       return 0;
     });
-  
-    return sortedIps.map((ip) => {
+
+    // Filter hosts based on hideOffline and hideDhcp settings.
+    const filteredIps = sortedIps.filter(ip => {
+      const host = scanData[ip];
+      if (hideOffline && host.status === 'offline') return false;
+      if (hideDhcp && host.is_dhcp) return false;
+      return true;
+    });
+
+    return filteredIps.map((ip) => {
       const host = scanData[ip];
       return (
         <div key={ip} className="host-card" onClick={(e) => handleHostClick(ip, e)}>
@@ -135,100 +137,77 @@ function App() {
           <h4>{host.hostname ? `Hostname: ${host.hostname}` : ""}</h4>
           <p>MAC: {host.mac}</p>
           <p>Vendor: {host.vendor}</p>
-          {/* Display DHCP flag */}
-          <p className="dhcp-flag">
-            Type: {host.is_dhcp ? "DHCP" : "Static"}
-          </p>
           <p className="open-ports">
             Open Ports: {host.ports && host.ports.length ? host.ports.join(', ') : "None"}
           </p>
           {host.port_scan_in_progress && (
             <p className="scanning-indicator">Scanning in progress...</p>
           )}
+          <p className="dhcp-flag">
+            Type: {host.is_dhcp ? "DHCP" : "Static"}
+          </p>
         </div>
       );
     });
   };
-  
 
-// Floating panel for host actions
-const renderSelectedHostActions = () => {
-  if (!selectedHost) return null;
-  return (
-    <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
-      <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
-      <h2>Actions for {selectedHost}</h2>
-      <div className="action-group">
-        <label>Port Scan Type:</label>
-        <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
-          <option value="popular">Popular Ports</option>
-          <option value="range">Range</option>
-          <option value="all">All Ports</option>
-        </select>
-        {scanType === 'range' && (
-          <>
-            <input 
-              type="number" 
-              placeholder="Start Port" 
-              value={rangeStart} 
-              onChange={(e) => setRangeStart(e.target.value)} 
-            />
-            <input 
-              type="number" 
-              placeholder="End Port" 
-              value={rangeEnd} 
-              onChange={(e) => setRangeEnd(e.target.value)} 
-            />
-          </>
-        )}
-        <button onClick={startPortScan}>Start Port Scan</button>
-      </div>
-      <div className="action-group">
-        <h3>Banner Grabbing</h3>
-        <input 
-          type="number" 
-          placeholder="Port for banner grab" 
-          value={bannerPort} 
-          onChange={(e) => setBannerPort(e.target.value)} 
-        />
-        <button onClick={startBannerGrab}>Grab Banner</button>
-        {bannerResult && (
+  const renderSelectedHostActions = () => {
+    if (!selectedHost) return null;
+    return (
+      <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
+        <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
+        <h2>Actions for {selectedHost}</h2>
+        <div className="action-group">
+          <label>Port Scan Type:</label>
+          <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
+            <option value="popular">Popular Ports</option>
+            <option value="range">Range</option>
+            <option value="all">All Ports</option>
+          </select>
+          {scanType === 'range' && (
+            <>
+              <input type="number" placeholder="Start Port" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
+              <input type="number" placeholder="End Port" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
+            </>
+          )}
+          <button onClick={startPortScan}>Start Port Scan</button>
+        </div>
+        <div className="action-group">
+          <h3>Banner Grabbing</h3>
+          <input type="number" placeholder="Port for banner grab" value={bannerPort} onChange={(e) => setBannerPort(e.target.value)} />
+          <button onClick={startBannerGrab}>Grab Banner</button>
+          {bannerResult && (
+            <div>
+              <h4>Banner:</h4>
+              <p>{bannerResult}</p>
+            </div>
+          )}
+        </div>
+        <div className="action-group">
+          <h3>Update Host Details</h3>
           <div>
-            <h4>Banner:</h4>
-            <p>{bannerResult}</p>
+            <label htmlFor="hostname">Hostname:</label>
+            <input type="text" id="hostname" value={updatedHostname} onChange={(e) => setUpdatedHostname(e.target.value)} placeholder="Enter hostname" />
           </div>
-        )}
-      </div>
-      <div className="action-group">
-        <h3>Update Host Details</h3>
-        <div>
-          <label htmlFor="hostname">Hostname:</label>
-          <input 
-            type="text" 
-            id="hostname" 
-            value={updatedHostname} 
-            onChange={(e) => setUpdatedHostname(e.target.value)} 
-            placeholder="Enter hostname" 
-          />
+          <div>
+            <label htmlFor="dhcpFlag">DHCP:</label>
+            <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
+          </div>
+          <button onClick={updateHostDetails}>Save Details</button>
         </div>
-        <div>
-          <label htmlFor="dhcpFlag">DHCP:</label>
-          <input 
-            type="checkbox" 
-            id="dhcpFlag" 
-            checked={updatedIsDhcp} 
-            onChange={(e) => setUpdatedIsDhcp(e.target.checked)} 
-          />
-        </div>
-        <button onClick={updateHostDetails}>Save Details</button>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   return (
     <div className="App">
-      <Sidebar endpoint={ENDPOINT} />
+      <Sidebar 
+        endpoint={ENDPOINT} 
+        hideOffline={hideOffline} 
+        hideDhcp={hideDhcp} 
+        setHideOffline={setHideOffline} 
+        setHideDhcp={setHideDhcp}
+      />
       <div className="main-content" style={{ marginLeft: '300px', padding: '20px' }}>
         <header className="App-header">
           <h1>Spynet Dashboard</h1>
