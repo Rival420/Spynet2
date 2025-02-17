@@ -91,19 +91,20 @@ class NetworkScanner:
             open_ports = scan_ports_for_host(ip, ports, timeout=self.timeout)
             with self.lock:
                 if ip in self.hosts:
-                    # Convert both existing ports and new scan result into sets of numeric values.
+                    # Convert existing ports (if any) and new scan results into sets of numeric values.
                     existing_ports = filter_numeric_ports(self.hosts[ip].get('ports', []))
                     new_ports = filter_numeric_ports(open_ports)
-                    
-                    # If the new scan returned any ports, merge them with existing ones.
                     if new_ports:
+                        # Merge the new ports with the existing ports.
                         merged_ports = sorted(existing_ports.union(new_ports))
                         self.hosts[ip]['ports'] = merged_ports
-                    else:
-                        # If the new scan returns an empty list and there are already ports recorded,
-                        # keep the existing port list intact.
-                        if not existing_ports:
-                            self.hosts[ip]['ports'] = []  # if none exist, assign an empty list
+                        # Update the corresponding database record.
+                        db_host = db_session.query(Host).filter_by(ip=ip).first()
+                        if db_host:
+                            # Save as a comma-separated string.
+                            db_host.port_scan_result = ','.join(map(str, merged_ports))
+                            db_session.commit()
+                    # If new_ports is empty but there are already ports stored, do nothing.
                     self.hosts[ip]['port_scan_in_progress'] = False
 
 
