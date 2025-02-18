@@ -51,12 +51,13 @@ def grab_banner(host, port, timeout=2):
     """
     Attempts to connect to host:port and read a banner.
     If no banner is initially received, it sends a protocol-specific probe.
+    For SSL ports, certificate verification is disabled to allow self-signed certificates.
     """
     print(f"[+] Grabbing port {port} for host {host}")
     try:
-        # Use SSL for known secure ports (e.g., 443 for HTTPS)
+        # Use an unverified SSL context for ports requiring SSL (e.g., 443)
         if port in [443]:
-            context = ssl.create_default_context()
+            context = ssl._create_unverified_context()
             sock = socket.create_connection((host, port), timeout=timeout)
             s = context.wrap_socket(sock, server_hostname=host)
         else:
@@ -68,7 +69,7 @@ def grab_banner(host, port, timeout=2):
         except socket.timeout:
             banner = b""
         
-        # If no banner is returned automatically, try sending a probe
+        # If no banner is returned, send a protocol-specific probe
         if not banner:
             probes = {
                 80: f"GET / HTTP/1.1\r\nHost: {host}\r\n\r\n",
