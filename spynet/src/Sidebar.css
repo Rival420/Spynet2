@@ -116,15 +116,64 @@
     background-color: #e53935;
   }
   
-  .filter-controls {
-    margin-top: 15px;
-    display: flex;
-    flex-direction: column;
-  }
-  
-  .filter-controls label {
-    color: #fff;
-    font-size: 0.9em;
-    margin-bottom: 5px;
-  }
-  
+ /* Filter Controls Container */
+.filter-controls {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Switch Container: flex layout with alignment */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9em;
+  color: #fff;
+}
+
+/* Hide the default checkbox */
+.switch input {
+  display: none;
+}
+
+/* Slider (the visual switch) */
+.slider.round {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+  background-color: #555; /* dark gray when off */
+  border-radius: 26px;
+  transition: background-color 0.4s;
+}
+
+/* The knob inside the slider */
+.slider.round:before {
+  content: "";
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: transform 0.4s;
+}
+
+/* When the checkbox is checked, change background color */
+input:checked + .slider.round {
+  background-color: #4caf50;
+}
+
+/* When checked, move the knob */
+input:checked + .slider.round:before {
+  transform: translateX(24px);
+}
+
+/* Style for the label text next to the switch */
+.switch-text {
+  /* Adjust margin/padding as needed */
+  margin-left: 5px;
+}

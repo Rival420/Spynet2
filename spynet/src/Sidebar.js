@@ -124,21 +124,24 @@ function Sidebar({ endpoint, hideOffline, hideDhcp, setHideOffline, setHideDhcp 
             </button>
           </div>
           <div className="filter-controls">
-            <label>
+          <label className="switch">
               <input
                 type="checkbox"
                 checked={hideOffline}
                 onChange={(e) => setHideOffline(e.target.checked)}
+                
               />
-              Hide Offline Hosts
+              <span className="slider round"></span>
+              <span className="switch-text">Hide Offline Hosts</span>
             </label>
-            <label>
+            <label className="switch">
               <input
                 type="checkbox"
                 checked={hideDhcp}
                 onChange={(e) => setHideDhcp(e.target.checked)}
               />
-              Hide DHCP Hosts
+              <span className="slider round"></span>
+              <span className="switch-text">Hide DHCP Hosts</span>
             </label>
           </div>
         </div>
