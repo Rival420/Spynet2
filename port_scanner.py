@@ -2,6 +2,7 @@
 from scapy.all import IP, TCP, sr1
 import threading
 import socket
+import ssl
 
 def syn_scan(target, port, timeout=1):
     """
@@ -49,14 +50,41 @@ def scan_ports_for_host(host, ports, timeout=1):
 def grab_banner(host, port, timeout=2):
     """
     Attempts to connect to host:port and read a banner.
+    If no banner is initially received, it sends a protocol-specific probe.
     """
     print(f"[+] Grabbing port {port} for host {host}")
     try:
-        s = socket.socket()
+        # Use SSL for known secure ports (e.g., 443 for HTTPS)
+        if port in [443]:
+            context = ssl.create_default_context()
+            sock = socket.create_connection((host, port), timeout=timeout)
+            s = context.wrap_socket(sock, server_hostname=host)
+        else:
+            s = socket.create_connection((host, port), timeout=timeout)
+        
         s.settimeout(timeout)
-        s.connect((host, port))
-        banner = s.recv(1024)
+        try:
+            banner = s.recv(1024)
+        except socket.timeout:
+            banner = b""
+        
+        # If no banner is returned automatically, try sending a probe
+        if not banner:
+            probes = {
+                80: f"GET / HTTP/1.1\r\nHost: {host}\r\n\r\n",
+                21: "\r\n",  # FTP
+                25: "\r\n",  # SMTP
+                110: "\r\n", # POP3
+                143: "\r\n", # IMAP
+            }
+            if port in probes:
+                try:
+                    s.sendall(probes[port].encode('utf-8'))
+                    banner = s.recv(1024)
+                except Exception as e:
+                    print(f"[-] Error sending probe: {e}")
         s.close()
-        return banner.decode('utf-8', errors='ignore')
+        result = banner.decode('utf-8', errors='ignore').strip() if banner else "No banner received."
+        return result
     except Exception as e:
         return str(e)
