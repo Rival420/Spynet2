@@ -1,7 +1,7 @@
 # server.py
 import threading
 from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO
 from scanner import NetworkScanner
 from port_scanner import scan_ports_for_host, grab_banner
