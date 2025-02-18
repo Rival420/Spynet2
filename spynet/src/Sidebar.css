@@ -164,7 +164,7 @@
 
 /* When the checkbox is checked, change background color */
 input:checked + .slider.round {
-  background-color: #2196F3;
+  background-color: #4caf50;
 }
 
 /* When checked, move the knob */
