@@ -151,6 +151,25 @@ function App() {
     });
   };
 
+  const performMacLookup = () => {
+    if (!selectedHost) return;
+    const payload = { host: selectedHost };
+    fetch(`${ENDPOINT}/api/command/maclookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("MAC Lookup result:", data);
+        // Option 1: update the floating menu's vendor field (if you want it to update immediately)
+        // Option 2: alert the user
+        alert(`Vendor for ${selectedHost}: ${data.vendor}`);
+      })
+      .catch((err) => console.error("Error performing MAC lookup:", err));
+  };
+  
+
   const renderSelectedHostActions = () => {
     if (!selectedHost) return null;
     return (
@@ -194,6 +213,9 @@ function App() {
             <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
           </div>
           <button onClick={updateHostDetails}>Save Details</button>
+        </div>
+        <div className="action-group">
+          <button onClick={performMacLookup}>MAC Vendor Lookup</button>
         </div>
       </div>
     );

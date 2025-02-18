@@ -5,6 +5,7 @@ from flask_cors import CORS
 from flask_socketio import SocketIO
 from scanner import NetworkScanner
 from port_scanner import scan_ports_for_host, grab_banner
+from arp_scanner import lookup_vendor
 import time
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -151,6 +152,41 @@ def update_host():
             scanner.hosts[ip]['is_dhcp'] = bool(is_dhcp)
 
     return jsonify({"status": "Host updated", "ip": ip, "hostname": db_host.hostname, "is_dhcp": db_host.is_dhcp})
+
+@app.route('/api/command/maclookup', methods=['POST'])
+def api_maclookup():
+    data = request.get_json()
+    host_ip = data.get('host')
+    if not host_ip:
+        return jsonify({"error": "host is required"}), 400
+
+    # Try to get the host data from memory; if not, fall back to the database.
+    host_data = scanner.hosts.get(host_ip)
+    if host_data:
+        mac = host_data.get('mac')
+    else:
+        db_host = db_session.query(Host).filter_by(ip=host_ip).first()
+        if db_host:
+            mac = db_host.mac
+        else:
+            return jsonify({"error": "Host not found"}), 404
+
+    # Import and call the lookup_vendor function from arp_scanner.
+    from arp_scanner import lookup_vendor
+    vendor = lookup_vendor(mac)
+
+    # Save vendor to in-memory data if available.
+    if host_data:
+        host_data['vendor'] = vendor
+
+    # Update the database record with the found vendor.
+    db_host = db_session.query(Host).filter_by(ip=host_ip).first()
+    if db_host:
+        db_host.vendor = vendor
+        db_session.commit()
+
+    return jsonify({"host": host_ip, "vendor": vendor})
+
 
 
 def background_thread():
