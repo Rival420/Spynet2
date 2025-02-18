@@ -154,6 +154,7 @@ def update_host():
     return jsonify({"status": "Host updated", "ip": ip, "hostname": db_host.hostname, "is_dhcp": db_host.is_dhcp})
 
 @app.route('/api/command/maclookup', methods=['POST'])
+@cross_origin()
 def api_maclookup():
     data = request.get_json()
     host_ip = data.get('host')
