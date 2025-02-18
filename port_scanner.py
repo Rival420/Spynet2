@@ -54,9 +54,13 @@ def grab_banner(host, port, timeout=2):
     For SSL ports, certificate verification is disabled to allow self-signed certificates.
     """
     print(f"[+] Grabbing port {port} for host {host}")
+
+    # Define known SSL ports
+    ssl_ports = {443, 465, 993, 995, 990, 636, 8443}
+
     try:
         # Use an unverified SSL context for ports requiring SSL (e.g., 443)
-        if port in [443]:
+        if port in ssl_ports:
             context = ssl._create_unverified_context()
             sock = socket.create_connection((host, port), timeout=timeout)
             s = context.wrap_socket(sock, server_hostname=host)
@@ -73,10 +77,17 @@ def grab_banner(host, port, timeout=2):
         if not banner:
             probes = {
                 80: f"GET / HTTP/1.1\r\nHost: {host}\r\n\r\n",
-                21: "\r\n",  # FTP
-                25: "\r\n",  # SMTP
-                110: "\r\n", # POP3
-                143: "\r\n", # IMAP
+                443: f"GET / HTTP/1.1\r\nHost: {host}\r\n\r\n",
+                8443: f"GET / HTTP/1.1\r\nHost: {host}\r\n\r\n",
+                21: "\r\n",               # FTP
+                25: "EHLO example.com\r\n",# SMTP
+                465: "EHLO example.com\r\n",# SMTP over SSL
+                110: "\r\n",              # POP3
+                995: "\r\n",              # POP3S
+                143: "\r\n",              # IMAP
+                993: "\r\n",              # IMAPS
+                636: "\r\n",              # LDAPS
+                990: "\r\n",              # Implicit FTPS
             }
             if port in probes:
                 try:
