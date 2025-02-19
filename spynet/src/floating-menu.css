@@ -10,6 +10,8 @@
     z-index: 1000;
     max-height: 90vh;
     overflow-y: auto;
+    /* Ensure the panel never exceeds the viewport width */
+    max-width: calc(100vw - 40px);
   }
   
   .floating-panel .close-btn {
@@ -136,5 +138,19 @@
     padding: 10px;
     border-radius: 4px;
     color: #fff;
+  }
+  
+  /* Responsive adjustments for floating menu */
+  @media (max-width: 600px) {
+    .floating-panel {
+      position: fixed;
+      width: 90%;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 20px;
+      top: auto;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
   }
   
