@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import socketIOClient from 'socket.io-client';
 import Sidebar from './Sidebar';
+import FloatingMenu from './floating-menu';
 import './App.css';
 
 const ENDPOINT = 'http://192.168.1.81:5000';
@@ -18,7 +19,7 @@ function App() {
   const [updatedHostname, setUpdatedHostname] = useState("");
   const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
 
-  // New filtering state:
+  // Filtering state:
   const [hideOffline, setHideOffline] = useState(false);
   const [hideDhcp, setHideDhcp] = useState(false);
 
@@ -40,7 +41,6 @@ function App() {
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    // Compute floating panel position relative to the main-content container.
     const mainContent = document.querySelector('.main-content');
     const mainRect = mainContent.getBoundingClientRect();
     setFloatingPos({
@@ -107,8 +107,23 @@ function App() {
       .catch((err) => console.error(err));
   };
 
+  const performMacLookup = () => {
+    if (!selectedHost) return;
+    const payload = { host: selectedHost };
+    fetch(`${ENDPOINT}/api/command/maclookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("MAC Lookup result:", data);
+        alert(`Vendor for ${selectedHost}: ${data.vendor}`);
+      })
+      .catch((err) => console.error("Error performing MAC lookup:", err));
+  };
+
   const renderHosts = () => {
-    // Sort IP addresses numerically in ascending order.
     const sortedIps = Object.keys(scanData).sort((a, b) => {
       const ipA = a.split('.').map(Number);
       const ipB = b.split('.').map(Number);
@@ -119,7 +134,6 @@ function App() {
       return 0;
     });
 
-    // Filter hosts based on hideOffline and hideDhcp settings.
     const filteredIps = sortedIps.filter(ip => {
       const host = scanData[ip];
       if (hideOffline && host.status === 'offline') return false;
@@ -151,127 +165,6 @@ function App() {
     });
   };
 
-  const performMacLookup = () => {
-    if (!selectedHost) return;
-    const payload = { host: selectedHost };
-    fetch(`${ENDPOINT}/api/command/maclookup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        console.log("MAC Lookup result:", data);
-        // Option 1: update the floating menu's vendor field (if you want it to update immediately)
-        // Option 2: alert the user
-        alert(`Vendor for ${selectedHost}: ${data.vendor}`);
-      })
-      .catch((err) => console.error("Error performing MAC lookup:", err));
-  };
-  
-
-  const renderSelectedHostActions = () => {
-    if (!selectedHost) return null;
-    return (
-      <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
-        <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
-        <h2>Actions for {selectedHost}</h2>
-        
-        {/* Group 1: Update Host Details */}
-        <div className="action-group update-details">
-          <h3>Host Details</h3>
-          <div className="form-row">
-            <label htmlFor="hostname">Hostname:</label>
-            <input
-              type="text"
-              id="hostname"
-              value={updatedHostname}
-              onChange={(e) => setUpdatedHostname(e.target.value)}
-              placeholder="Enter hostname"
-            />
-          </div>
-          <div className="form-row">
-            <label htmlFor="dhcpFlag">DHCP:</label>
-            <label className="switch">
-              <input
-                type="checkbox"
-                id="dhcpFlag"
-                checked={updatedIsDhcp}
-                onChange={(e) => setUpdatedIsDhcp(e.target.checked)}
-              />
-              <span className="slider round"></span>
-            </label>
-          </div>
-          <button className="btn btn-save" onClick={updateHostDetails}>
-            Save Details
-          </button>
-        </div>
-        
-        {/* Group 2: Port Scanning */}
-        <div className="action-group port-scan">
-          <h3>Port Scan</h3>
-          <div className="form-row">
-            <label>Scan Type:</label>
-            <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
-              <option value="popular">Popular Ports</option>
-              <option value="range">Range</option>
-              <option value="all">All Ports</option>
-            </select>
-          </div>
-          {scanType === 'range' && (
-            <div className="form-row">
-              <input
-                type="number"
-                placeholder="Start Port"
-                value={rangeStart}
-                onChange={(e) => setRangeStart(e.target.value)}
-              />
-              <input
-                type="number"
-                placeholder="End Port"
-                value={rangeEnd}
-                onChange={(e) => setRangeEnd(e.target.value)}
-              />
-            </div>
-          )}
-          <button className="btn btn-action" onClick={startPortScan}>
-            Start Port Scan
-          </button>
-        </div>
-        
-        {/* Group 3: Banner Grabbing */}
-        <div className="action-group banner-grab">
-          <h3>Banner Grabbing</h3>
-          <div className="form-row">
-            <input
-              type="number"
-              placeholder="Port for Banner"
-              value={bannerPort}
-              onChange={(e) => setBannerPort(e.target.value)}
-            />
-          </div>
-          <button className="btn btn-action" onClick={startBannerGrab}>
-            Grab Banner
-          </button>
-          {bannerResult && (
-            <div className="banner-result">
-              <h4>Banner:</h4>
-              <p>{bannerResult}</p>
-            </div>
-          )}
-        </div>
-        
-        {/* Group 4: MAC Vendor Lookup */}
-        <div className="action-group mac-lookup">
-          <button className="btn btn-action" onClick={performMacLookup}>
-            MAC Vendor Lookup
-          </button>
-        </div>
-      </div>
-    );
-  };
-  
-
   return (
     <div className="App">
       <Sidebar 
@@ -281,13 +174,36 @@ function App() {
         setHideOffline={setHideOffline} 
         setHideDhcp={setHideDhcp}
       />
-      <div className="main-content" style={{ marginLeft: '300px', padding: '20px' }}>
+      <div className="main-content">
         <header className="App-header">
           <h1>Spynet Dashboard</h1>
         </header>
         <main>
           <div className="host-list">{renderHosts()}</div>
-          {renderSelectedHostActions()}
+          {selectedHost && (
+            <FloatingMenu
+              selectedHost={selectedHost}
+              floatingPos={floatingPos}
+              updatedHostname={updatedHostname}
+              updatedIsDhcp={updatedIsDhcp}
+              onHostnameChange={(e) => setUpdatedHostname(e.target.value)}
+              onIsDhcpChange={(e) => setUpdatedIsDhcp(e.target.checked)}
+              updateHostDetails={updateHostDetails}
+              scanType={scanType}
+              onScanTypeChange={(e) => setScanType(e.target.value)}
+              rangeStart={rangeStart}
+              onRangeStartChange={(e) => setRangeStart(e.target.value)}
+              rangeEnd={rangeEnd}
+              onRangeEndChange={(e) => setRangeEnd(e.target.value)}
+              startPortScan={startPortScan}
+              bannerPort={bannerPort}
+              onBannerPortChange={(e) => setBannerPort(e.target.value)}
+              startBannerGrab={startBannerGrab}
+              bannerResult={bannerResult}
+              performMacLookup={performMacLookup}
+              onClose={() => setSelectedHost(null)}
+            />
+          )}
         </main>
       </div>
     </div>
