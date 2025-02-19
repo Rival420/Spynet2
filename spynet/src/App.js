@@ -43,9 +43,18 @@ function App() {
     const rect = event.currentTarget.getBoundingClientRect();
     const mainContent = document.querySelector('.main-content');
     const mainRect = mainContent.getBoundingClientRect();
+
+    // Compute initial position based on the host card's position.
+    let left = rect.right - mainRect.left + 10;
+    const panelWidth = 320; // our floating menu width for desktop
+    // Check if the menu will overflow the viewport's right edge.
+    if (left + panelWidth > window.innerWidth - 20) {
+      left = window.innerWidth - panelWidth - 20;
+    }
+
     setFloatingPos({
       top: rect.top - mainRect.top,
-      left: rect.right - mainRect.left + 10,
+      left: left,
     });
   };
 
