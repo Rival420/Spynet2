@@ -176,50 +176,101 @@ function App() {
       <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
         <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
         <h2>Actions for {selectedHost}</h2>
-        <div className="action-group">
-          <label>Port Scan Type:</label>
-          <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
-            <option value="popular">Popular Ports</option>
-            <option value="range">Range</option>
-            <option value="all">All Ports</option>
-          </select>
-          {scanType === 'range' && (
-            <>
-              <input type="number" placeholder="Start Port" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
-              <input type="number" placeholder="End Port" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
-            </>
-          )}
-          <button onClick={startPortScan}>Start Port Scan</button>
+        
+        {/* Group 1: Update Host Details */}
+        <div className="action-group update-details">
+          <h3>Host Details</h3>
+          <div className="form-row">
+            <label htmlFor="hostname">Hostname:</label>
+            <input
+              type="text"
+              id="hostname"
+              value={updatedHostname}
+              onChange={(e) => setUpdatedHostname(e.target.value)}
+              placeholder="Enter hostname"
+            />
+          </div>
+          <div className="form-row">
+            <label htmlFor="dhcpFlag">DHCP:</label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                id="dhcpFlag"
+                checked={updatedIsDhcp}
+                onChange={(e) => setUpdatedIsDhcp(e.target.checked)}
+              />
+              <span className="slider round"></span>
+            </label>
+          </div>
+          <button className="btn btn-save" onClick={updateHostDetails}>
+            Save Details
+          </button>
         </div>
-        <div className="action-group">
+        
+        {/* Group 2: Port Scanning */}
+        <div className="action-group port-scan">
+          <h3>Port Scan</h3>
+          <div className="form-row">
+            <label>Scan Type:</label>
+            <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
+              <option value="popular">Popular Ports</option>
+              <option value="range">Range</option>
+              <option value="all">All Ports</option>
+            </select>
+          </div>
+          {scanType === 'range' && (
+            <div className="form-row">
+              <input
+                type="number"
+                placeholder="Start Port"
+                value={rangeStart}
+                onChange={(e) => setRangeStart(e.target.value)}
+              />
+              <input
+                type="number"
+                placeholder="End Port"
+                value={rangeEnd}
+                onChange={(e) => setRangeEnd(e.target.value)}
+              />
+            </div>
+          )}
+          <button className="btn btn-action" onClick={startPortScan}>
+            Start Port Scan
+          </button>
+        </div>
+        
+        {/* Group 3: Banner Grabbing */}
+        <div className="action-group banner-grab">
           <h3>Banner Grabbing</h3>
-          <input type="number" placeholder="Port for banner grab" value={bannerPort} onChange={(e) => setBannerPort(e.target.value)} />
-          <button onClick={startBannerGrab}>Grab Banner</button>
+          <div className="form-row">
+            <input
+              type="number"
+              placeholder="Port for Banner"
+              value={bannerPort}
+              onChange={(e) => setBannerPort(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-action" onClick={startBannerGrab}>
+            Grab Banner
+          </button>
           {bannerResult && (
-            <div>
+            <div className="banner-result">
               <h4>Banner:</h4>
               <p>{bannerResult}</p>
             </div>
           )}
         </div>
-        <div className="action-group">
-          <h3>Update Host Details</h3>
-          <div>
-            <label htmlFor="hostname">Hostname:</label>
-            <input type="text" id="hostname" value={updatedHostname} onChange={(e) => setUpdatedHostname(e.target.value)} placeholder="Enter hostname" />
-          </div>
-          <div>
-            <label htmlFor="dhcpFlag">DHCP:</label>
-            <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
-          </div>
-          <button onClick={updateHostDetails}>Save Details</button>
-        </div>
-        <div className="action-group">
-          <button onClick={performMacLookup}>MAC Vendor Lookup</button>
+        
+        {/* Group 4: MAC Vendor Lookup */}
+        <div className="action-group mac-lookup">
+          <button className="btn btn-action" onClick={performMacLookup}>
+            MAC Vendor Lookup
+          </button>
         </div>
       </div>
     );
   };
+  
 
   return (
     <div className="App">

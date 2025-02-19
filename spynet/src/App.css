@@ -97,6 +97,7 @@
 }
 
 /* Scanner Controls Styles */
+/*
 .scanner-controls {
   background-color: #1e1e1e;
   border: 1px solid #333;
@@ -190,6 +191,7 @@
 .scanner-controls .btn-stop:hover {
   background-color: #e53935;
 }
+*/
 
 .action-group label {
   display: block;
@@ -223,28 +225,28 @@
   color: #ff9800;
 }
 
-/* Main content container – ensure it’s positioned relative */
+/* Main content container: ensure it’s positioned relative for absolute positioning within it */
 .main-content {
   position: relative;
-  margin-left: 300px; /* adjust if needed */
+  margin-left: 300px; /* adjust according to your sidebar */
   padding: 20px;
 }
 
 /* Floating panel styling */
 .floating-panel {
-  position: absolute; /* now relative to .main-content */
+  position: absolute; /* relative to .main-content */
   background-color: #1e1e1e;
   border: 1px solid #333;
   border-radius: 8px;
   padding: 20px;
-  width: 300px;
+  width: 320px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
   z-index: 1000;
-  max-height: 90vh;   /* so it never exceeds the viewport height */
-  overflow-y: auto;   /* scroll internally if content is long */
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
-/* Close button: red cross in the top-right corner of the floating panel */
+/* Close button: red cross in the top-right corner */
 .floating-panel .close-btn {
   position: absolute;
   top: 5px;
@@ -254,49 +256,119 @@
   font-size: 24px;
   color: red;
   cursor: pointer;
-  line-height: 1;
 }
 
-/* Floating panel form elements */
+/* Action groups within the panel */
 .floating-panel .action-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
-.floating-panel .action-group input,
-.floating-panel .action-group select {
-  margin: 5px 0;
-  padding: 5px;
+.floating-panel .action-group h3 {
+  margin-bottom: 10px;
+  color: #fff;
+  border-bottom: 1px solid #333;
+  padding-bottom: 5px;
+}
+
+/* Form row for inputs inside the panel */
+.floating-panel .form-row {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.floating-panel .form-row label {
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #bbb;
+}
+
+.floating-panel .form-row input,
+.floating-panel .form-row select {
+  padding: 8px;
+  border: 1px solid #444;
   border-radius: 4px;
-  border: 1px solid #555;
   background-color: #2a2a2a;
   color: #fff;
-  width: 100%;
+  font-size: 1em;
+  outline: none;
 }
 
-.floating-panel button {
-  padding: 8px 12px;
-  background-color: #333;
-  color: #fff;
+/* Button styles for actions */
+.floating-panel .btn {
+  padding: 10px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  font-weight: bold;
   margin-top: 10px;
+  transition: background-color 0.3s;
 }
 
-.floating-panel button:hover {
+.floating-panel .btn-action {
+  background-color: #333;
+  color: #fff;
+}
+
+.floating-panel .btn-action:hover {
   background-color: #444;
 }
 
+.floating-panel .btn-save {
+  background-color: #4caf50;
+  color: #fff;
+}
 
-.close-btn {
-  background-color: #800000;
+.floating-panel .btn-save:hover {
+  background-color: #45a049;
+}
+
+/* Toggle switch styling (for DHCP) */
+.floating-panel .switch {
+  display: inline-block;
+  position: relative;
+  width: 50px;
+  height: 26px;
+}
+.floating-panel .switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.floating-panel .slider.round {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #555;
+  transition: 0.4s;
+  border-radius: 26px;
+}
+.floating-panel .slider.round:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+.floating-panel input:checked + .slider.round {
+  background-color: #2196F3;
+}
+.floating-panel input:checked + .slider.round:before {
+  transform: translateX(24px);
+}
+
+/* Optional: Style for banner result */
+.banner-result {
   margin-top: 10px;
-}
-.close-btn:hover {
-  background-color: #a00000;
-}
-.dhcp-flag {
-  font-size: 0.9em;
-  color: #bbb;
-  margin: 5px 0;
+  background-color: #2a2a2a;
+  padding: 10px;
+  border-radius: 4px;
+  color: #fff;
 }
