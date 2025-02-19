@@ -48,23 +48,28 @@ class NetworkScanner:
             for host in live_hosts:
                 ip = host['ip']
                 # Update database: try to find an existing record.
+                # Update database: try to find an existing record.
                 db_host = db_session.query(Host).filter_by(ip=ip).first()
                 if db_host:
                     # Only update fields provided by ARP scan.
                     db_host.mac = host['mac']
-                    db_host.vendor = host['vendor']
+                    # Update vendor only if the new value isn't "Unknown" or the current vendor is "Unknown"
+                    if host['vendor'] != "Unknown" or db_host.vendor == "Unknown":
+                        db_host.vendor = host['vendor']
                     db_host.last_seen = datetime.utcnow()
                     # Do NOT update hostname and is_dhcp (manual fields)
                 else:
-                    db_host = Host(ip=ip,
-                                   mac=host['mac'],
-                                   vendor=host['vendor'],
-                                   last_seen=datetime.utcnow(),
-                                   hostname="", #default empty, can be manually updated later
-                                   is_dhcp=False #default False
+                    db_host = Host(
+                        ip=ip,
+                        mac=host['mac'],
+                        vendor=host['vendor'],
+                        last_seen=datetime.utcnow(),
+                        hostname="",  # default empty, can be manually updated later
+                        is_dhcp=False # default False
                     )
                     db_session.add(db_host)
                 db_session.commit()
+
 
                 # Update in-memory dictionary (which is used for live socket updates)
                 if ip not in self.hosts:
@@ -149,6 +154,8 @@ class NetworkScanner:
                 'ports': ports,
                 'status': 'offline',  # Mark offline until confirmed by a new ARP scan.
                 'last_seen': db_host.last_seen.timestamp(),
-                'port_scan_in_progress': False
+                'port_scan_in_progress': False,
+                'hostname': db_host.hostname,
+                'is_dhcp': db_host.is_dhcp
         }
 

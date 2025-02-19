@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import socketIOClient from 'socket.io-client';
 import Sidebar from './Sidebar';
+import FloatingMenu from './floating-menu';
 import './App.css';
 
 const ENDPOINT = 'http://192.168.1.81:5000';
@@ -18,7 +19,7 @@ function App() {
   const [updatedHostname, setUpdatedHostname] = useState("");
   const [updatedIsDhcp, setUpdatedIsDhcp] = useState(false);
 
-  // New filtering state:
+  // Filtering state:
   const [hideOffline, setHideOffline] = useState(false);
   const [hideDhcp, setHideDhcp] = useState(false);
 
@@ -40,12 +41,20 @@ function App() {
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
     const rect = event.currentTarget.getBoundingClientRect();
-    // Compute floating panel position relative to the main-content container.
     const mainContent = document.querySelector('.main-content');
     const mainRect = mainContent.getBoundingClientRect();
+
+    // Compute initial position based on the host card's position.
+    let left = rect.right - mainRect.left + 10;
+    const panelWidth = 320; // our floating menu width for desktop
+    // Check if the menu will overflow the viewport's right edge.
+    if (left + panelWidth > window.innerWidth - 20) {
+      left = window.innerWidth - panelWidth - 20;
+    }
+
     setFloatingPos({
       top: rect.top - mainRect.top,
-      left: rect.right - mainRect.left + 10,
+      left: left,
     });
   };
 
@@ -107,8 +116,23 @@ function App() {
       .catch((err) => console.error(err));
   };
 
+  const performMacLookup = () => {
+    if (!selectedHost) return;
+    const payload = { host: selectedHost };
+    fetch(`${ENDPOINT}/api/command/maclookup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("MAC Lookup result:", data);
+        alert(`Vendor for ${selectedHost}: ${data.vendor}`);
+      })
+      .catch((err) => console.error("Error performing MAC lookup:", err));
+  };
+
   const renderHosts = () => {
-    // Sort IP addresses numerically in ascending order.
     const sortedIps = Object.keys(scanData).sort((a, b) => {
       const ipA = a.split('.').map(Number);
       const ipB = b.split('.').map(Number);
@@ -119,7 +143,6 @@ function App() {
       return 0;
     });
 
-    // Filter hosts based on hideOffline and hideDhcp settings.
     const filteredIps = sortedIps.filter(ip => {
       const host = scanData[ip];
       if (hideOffline && host.status === 'offline') return false;
@@ -151,54 +174,6 @@ function App() {
     });
   };
 
-  const renderSelectedHostActions = () => {
-    if (!selectedHost) return null;
-    return (
-      <div className="floating-panel" style={{ top: floatingPos.top, left: floatingPos.left }}>
-        <button className="close-btn" onClick={() => setSelectedHost(null)}>&times;</button>
-        <h2>Actions for {selectedHost}</h2>
-        <div className="action-group">
-          <label>Port Scan Type:</label>
-          <select value={scanType} onChange={(e) => setScanType(e.target.value)}>
-            <option value="popular">Popular Ports</option>
-            <option value="range">Range</option>
-            <option value="all">All Ports</option>
-          </select>
-          {scanType === 'range' && (
-            <>
-              <input type="number" placeholder="Start Port" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} />
-              <input type="number" placeholder="End Port" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} />
-            </>
-          )}
-          <button onClick={startPortScan}>Start Port Scan</button>
-        </div>
-        <div className="action-group">
-          <h3>Banner Grabbing</h3>
-          <input type="number" placeholder="Port for banner grab" value={bannerPort} onChange={(e) => setBannerPort(e.target.value)} />
-          <button onClick={startBannerGrab}>Grab Banner</button>
-          {bannerResult && (
-            <div>
-              <h4>Banner:</h4>
-              <p>{bannerResult}</p>
-            </div>
-          )}
-        </div>
-        <div className="action-group">
-          <h3>Update Host Details</h3>
-          <div>
-            <label htmlFor="hostname">Hostname:</label>
-            <input type="text" id="hostname" value={updatedHostname} onChange={(e) => setUpdatedHostname(e.target.value)} placeholder="Enter hostname" />
-          </div>
-          <div>
-            <label htmlFor="dhcpFlag">DHCP:</label>
-            <input type="checkbox" id="dhcpFlag" checked={updatedIsDhcp} onChange={(e) => setUpdatedIsDhcp(e.target.checked)} />
-          </div>
-          <button onClick={updateHostDetails}>Save Details</button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="App">
       <Sidebar 
@@ -208,13 +183,36 @@ function App() {
         setHideOffline={setHideOffline} 
         setHideDhcp={setHideDhcp}
       />
-      <div className="main-content" style={{ marginLeft: '300px', padding: '20px' }}>
+      <div className="main-content">
         <header className="App-header">
           <h1>Spynet Dashboard</h1>
         </header>
         <main>
           <div className="host-list">{renderHosts()}</div>
-          {renderSelectedHostActions()}
+          {selectedHost && (
+            <FloatingMenu
+              selectedHost={selectedHost}
+              floatingPos={floatingPos}
+              updatedHostname={updatedHostname}
+              updatedIsDhcp={updatedIsDhcp}
+              onHostnameChange={(e) => setUpdatedHostname(e.target.value)}
+              onIsDhcpChange={(e) => setUpdatedIsDhcp(e.target.checked)}
+              updateHostDetails={updateHostDetails}
+              scanType={scanType}
+              onScanTypeChange={(e) => setScanType(e.target.value)}
+              rangeStart={rangeStart}
+              onRangeStartChange={(e) => setRangeStart(e.target.value)}
+              rangeEnd={rangeEnd}
+              onRangeEndChange={(e) => setRangeEnd(e.target.value)}
+              startPortScan={startPortScan}
+              bannerPort={bannerPort}
+              onBannerPortChange={(e) => setBannerPort(e.target.value)}
+              startBannerGrab={startBannerGrab}
+              bannerResult={bannerResult}
+              performMacLookup={performMacLookup}
+              onClose={() => setSelectedHost(null)}
+            />
+          )}
         </main>
       </div>
     </div>
