@@ -154,6 +154,8 @@ class NetworkScanner:
                 'ports': ports,
                 'status': 'offline',  # Mark offline until confirmed by a new ARP scan.
                 'last_seen': db_host.last_seen.timestamp(),
-                'port_scan_in_progress': False
+                'port_scan_in_progress': False,
+                'hostname': db_host.hostname,
+                'is_dhcp': db_host.is_dhcp
         }
 
