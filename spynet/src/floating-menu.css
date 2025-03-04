@@ -12,6 +12,8 @@
     overflow-y: auto;
     /* Ensure the panel never exceeds the viewport width */
     max-width: calc(100vw - 40px);
+    left: 50%;
+    transform: translateX(-50%);
   }
   
   .floating-panel .close-btn {
