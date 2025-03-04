@@ -1,0 +1,19 @@
+version: '3'
+services:
+  spynet:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      REACT_APP_ENDPOINT: "http://localhost:5000"
+      REACT_APP_NETWORK: "192.168.1.0/24"
+      REACT_APP_PORT_START: "1"
+      REACT_APP_PORT_END: "1024"
+      REACT_APP_TIMEOUT: "2"
+      REACT_APP_INTERVAL: "60"
+      DB_PATH: "/app/data/spynet.db"
+    volumes:
+      - spynet_data:/app/data
+
+volumes:
+  spynet_data:
