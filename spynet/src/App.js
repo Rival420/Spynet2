@@ -5,7 +5,11 @@ import Sidebar from './Sidebar';
 import FloatingMenu from './floating-menu';
 import './App.css';
 
-const ENDPOINT = 'http://192.168.1.81:5000';
+// App.js
+const ENDPOINT = window._env_ && window._env_.REACT_APP_ENDPOINT 
+  ? window._env_.REACT_APP_ENDPOINT 
+  : 'http://localhost:5000';
+
 
 function App() {
   const [scanData, setScanData] = useState({});
@@ -36,27 +40,33 @@ function App() {
     setSelectedHost(hostIp);
     setBannerResult('');
     setBannerPort('');
+
     if (scanData[hostIp]) {
       setUpdatedHostname(scanData[hostIp].hostname || "");
       setUpdatedIsDhcp(scanData[hostIp].is_dhcp || false);
     }
-    const rect = event.currentTarget.getBoundingClientRect();
-    const mainContent = document.querySelector('.main-content');
-    const mainRect = mainContent.getBoundingClientRect();
 
-    // Compute initial position based on the host card's position.
-    let left = rect.right - mainRect.left + 10;
-    const panelWidth = 320; // our floating menu width for desktop
-    // Check if the menu will overflow the viewport's right edge.
-    if (left + panelWidth > window.innerWidth - 20) {
-      left = window.innerWidth - panelWidth - 20;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const panelWidth = 320; // Width of floating panel
+    const panelHeight = 300; // Estimated height of the floating panel
+    const padding = 20; // Padding to keep it inside the viewport
+
+    let left = rect.right + 10; // Default position to the right of the host card
+    let top = rect.top;
+
+    // Prevent the menu from going outside the right edge
+    if (left + panelWidth > window.innerWidth - padding) {
+        left = rect.left - panelWidth - 10; // Move it to the left side instead
     }
 
-    setFloatingPos({
-      top: rect.top - mainRect.top,
-      left: left,
-    });
-  };
+    // Prevent the menu from going below the bottom edge
+    if (top + panelHeight > window.innerHeight - padding) {
+        top = window.innerHeight - panelHeight - padding;
+    }
+
+    setFloatingPos({ top, left });
+};
+
 
   const startPortScan = () => {
     if (!selectedHost) return;
