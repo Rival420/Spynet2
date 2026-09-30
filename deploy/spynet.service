@@ -1,0 +1,34 @@
+[Unit]
+Description=Spynet home network monitor
+Documentation=https://github.com/Rival420/Spynet2
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=spynet
+Group=spynet
+WorkingDirectory=/opt/spynet
+Environment=SPYNET_DB=/var/lib/spynet/spynet.db
+Environment=SPYNET_PORT=5000
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/spynet/.venv/bin/python /opt/spynet/server.py
+Restart=always
+RestartSec=5
+
+# Raw sockets for ARP without running as root.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+NoNewPrivileges=true
+
+# Hardening: the service may only write its own data directory.
+ProtectSystem=strict
+ReadWritePaths=/var/lib/spynet
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+[Install]
+WantedBy=multi-user.target

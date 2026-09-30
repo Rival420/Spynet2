@@ -1,201 +1,355 @@
-# server.py
-import threading
-from flask import Flask, render_template, jsonify, request
-from flask_cors import CORS, cross_origin
+"""Spynet API + dashboard server. One process: Flask REST, Socket.IO push and
+the static frontend build."""
+import csv
+import io
+import logging
+import os
+import signal
+import sys
+
+from flask import Flask, jsonify, request, send_from_directory, Response
+from flask_cors import CORS
 from flask_socketio import SocketIO
+
+import config
+import settings as settings_store
+from db import init_db, session_scope
+from discovery import detect_network
+from models import Device, Event
+from port_scanner import grab_banner, service_name
 from scanner import NetworkScanner
-from port_scanner import scan_ports_for_host, grab_banner
-from arp_scanner import lookup_vendor
-import time
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from models import Base, Host
-from datetime import datetime
-from db import db_session
+from vendor import normalize_mac
 
-app = Flask(__name__, static_folder='./build', template_folder='./build')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logging.getLogger("werkzeug").setLevel(logging.WARNING)
+log = logging.getLogger("spynet")
+
+app = Flask(__name__, static_folder=None)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", logger=False, engineio_logger=False)
 
-# Initialize scanner without any parameters (inactive)
-scanner = NetworkScanner()
+init_db()
+scanner = NetworkScanner(emit=lambda name, payload: socketio.emit(name, payload))
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+DEVICE_TYPES = ["", "router", "computer", "laptop", "phone", "tablet", "tv", "speaker",
+                "camera", "iot", "printer", "console", "server", "nas", "other"]
 
-@app.route('/api/scan')
-def api_scan():
-    data = scanner.get_data()
+
+def error(message, status=400):
+    return jsonify({"error": message}), status
+
+
+def find_device(session, mac):
+    return session.query(Device).filter_by(mac=normalize_mac(mac)).first()
+
+
+# ------------------------------------------------------------------ frontend
+
+@app.route("/")
+@app.route("/<path:path>")
+def frontend(path="index.html"):
+    if path.startswith("api/") or path.startswith("socket.io"):
+        return error("Not found", 404)
+    full = os.path.join(config.FRONTEND_DIR, path)
+    if os.path.isfile(full):
+        return send_from_directory(config.FRONTEND_DIR, path)
+    index = os.path.join(config.FRONTEND_DIR, "index.html")
+    if os.path.isfile(index):
+        return send_from_directory(config.FRONTEND_DIR, "index.html")
+    return Response(
+        "<h1>Spynet API is running</h1><p>The dashboard has not been built yet. "
+        "Run <code>cd spynet && npm install && npm run build</code>, then reload.</p>",
+        mimetype="text/html", status=503)
+
+
+# ---------------------------------------------------------------------- state
+
+@app.get("/api/health")
+def health():
+    return jsonify({"ok": True, "scanner": scanner.status()["state"]})
+
+
+@app.get("/api/state")
+def state():
+    with session_scope() as s:
+        events = [e.to_dict() for e in s.query(Event).order_by(Event.id.desc()).limit(200)]
+    return jsonify({
+        "devices": scanner.all_devices(),
+        "events": events,
+        "scanner": scanner.status(),
+        "settings": settings_store.load(),
+        "device_types": DEVICE_TYPES,
+    })
+
+
+# -------------------------------------------------------------------- devices
+
+@app.get("/api/devices")
+def list_devices():
+    return jsonify(scanner.all_devices())
+
+
+@app.get("/api/devices/export.csv")
+def export_devices():
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["name", "hostname", "ip", "mac", "vendor", "type", "known", "online",
+                     "first_seen", "last_seen", "open_ports", "notes"])
+    for d in sorted(scanner.all_devices(), key=lambda x: [int(p) for p in x["ip"].split(".")] if x["ip"] else [999]):
+        writer.writerow([d["name"], d["hostname"], d["ip"], d["mac"], d["vendor"], d["device_type"],
+                         d["known"], d["online"], d["first_seen"], d["last_seen"],
+                         " ".join(map(str, d["ports"])), d["notes"]])
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=spynet-devices.csv"})
+
+
+@app.get("/api/devices/<mac>")
+def get_device(mac):
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        data = scanner._device_dict(d)
+        data["events"] = [e.to_dict() for e in
+                          s.query(Event).filter_by(mac=d.mac).order_by(Event.id.desc()).limit(100)]
     return jsonify(data)
 
-@app.route('/api/scanner/start', methods=['POST'])
-def start_scanner():
-    data = request.get_json()
-    network = data.get('network')
-    port_start = int(data.get('port_start', 1))
-    port_end = int(data.get('port_end', 1024))
-    timeout = int(data.get('timeout', 2))
-    interval = int(data.get('interval', 60))
-    if not network:
-        return jsonify({"error": "Network parameter is required"}), 400
-    scanner.start(network, (port_start, port_end), timeout, interval)
-    return jsonify({"status": "scanner started", "network": network})
 
-@app.route('/api/scanner/pause', methods=['POST'])
-def pause_scanner():
+@app.patch("/api/devices/<mac>")
+def update_device(mac):
+    body = request.get_json(silent=True) or {}
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        if "name" in body:
+            d.name = str(body["name"] or "").strip()[:120]
+        if "notes" in body:
+            d.notes = str(body["notes"] or "").strip()[:2000]
+        if "known" in body:
+            d.known = bool(body["known"])
+        if "device_type" in body:
+            dt = str(body["device_type"] or "")
+            if dt not in DEVICE_TYPES:
+                return error("Unknown device type")
+            d.device_type = dt
+        s.flush()
+        data = scanner._device_dict(d)
+    socketio.emit("device", data)
+    return jsonify(data)
+
+
+@app.delete("/api/devices/<mac>")
+def delete_device(mac):
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        s.query(Event).filter_by(mac=d.mac).delete()
+        s.delete(d)
+        mac = d.mac
+    socketio.emit("device", {"mac": mac, "deleted": True})
+    return jsonify({"deleted": mac})
+
+
+@app.post("/api/devices/acknowledge_all")
+def acknowledge_all():
+    with session_scope() as s:
+        count = s.query(Device).filter_by(known=False).update({"known": True})
+    socketio.emit("devices", scanner.all_devices())
+    return jsonify({"acknowledged": count})
+
+
+@app.post("/api/devices/<mac>/portscan")
+def device_portscan(mac):
+    body = request.get_json(silent=True) or {}
+    mode = body.get("mode", "quick")
+    try:
+        start = int(body.get("start", 1))
+        end = int(body.get("end", 1024))
+    except (TypeError, ValueError):
+        return error("start and end must be numbers")
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        if not d.ip:
+            return error("This device has no IP address yet")
+        mac = d.mac
+    try:
+        queued = scanner.request_port_scan(mac, mode, start, end)
+    except ValueError as exc:
+        return error(str(exc))
+    return jsonify({"queued": queued, "mac": mac, "mode": mode})
+
+
+@app.post("/api/devices/<mac>/banner")
+def device_banner(mac):
+    body = request.get_json(silent=True) or {}
+    try:
+        port = int(body.get("port"))
+    except (TypeError, ValueError):
+        return error("port is required")
+    if not 1 <= port <= 65535:
+        return error("port must be between 1 and 65535")
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        ip = d.ip
+    banner = grab_banner(ip, port, timeout=float(body.get("timeout", 3)))
+    return jsonify({"mac": mac, "ip": ip, "port": port, "service": service_name(port), "banner": banner})
+
+
+@app.post("/api/devices/<mac>/refresh")
+def device_refresh(mac):
+    if not scanner.refresh_device(normalize_mac(mac)):
+        return error("Device not found", 404)
+    return jsonify({"queued": True})
+
+
+# --------------------------------------------------------------------- events
+
+@app.get("/api/events")
+def list_events():
+    limit = min(int(request.args.get("limit", 200)), 2000)
+    mac = request.args.get("mac")
+    kind = request.args.get("kind")
+    with session_scope() as s:
+        q = s.query(Event)
+        if mac:
+            q = q.filter_by(mac=normalize_mac(mac))
+        if kind:
+            q = q.filter_by(kind=kind)
+        rows = q.order_by(Event.id.desc()).limit(limit).all()
+        return jsonify([e.to_dict() for e in rows])
+
+
+@app.delete("/api/events")
+def clear_events():
+    with session_scope() as s:
+        count = s.query(Event).delete()
+    socketio.emit("events_cleared", {})
+    return jsonify({"deleted": count})
+
+
+# -------------------------------------------------------------------- scanner
+
+@app.get("/api/scanner")
+def scanner_status():
+    return jsonify(scanner.status())
+
+
+@app.post("/api/scanner/start")
+def scanner_start():
+    body = request.get_json(silent=True) or {}
+    try:
+        if body:
+            settings_store.save({k: v for k, v in body.items() if k != "network"})
+            scanner.apply_settings(settings_store.load())
+        scanner.start(body.get("network"))
+    except ValueError as exc:
+        return error(str(exc))
+    return jsonify(scanner.status())
+
+
+@app.post("/api/scanner/pause")
+def scanner_pause():
     scanner.pause()
-    return jsonify({"status": "scanner paused"})
+    return jsonify(scanner.status())
 
-@app.route('/api/scanner/resume', methods=['POST'])
-def resume_scanner():
+
+@app.post("/api/scanner/resume")
+def scanner_resume():
     scanner.resume()
-    return jsonify({"status": "scanner resumed"})
+    return jsonify(scanner.status())
 
-@app.route('/api/scanner/stop', methods=['POST'])
-def stop_scanner():
+
+@app.post("/api/scanner/stop")
+def scanner_stop():
     scanner.stop()
-    return jsonify({"status": "scanner stopped"})
-
-# Existing endpoints for on-demand port scan and banner grab remain unchanged.
-@app.route('/api/command/portscan', methods=['POST'])
-def api_port_scan():
-    data = request.get_json()
-    host = data.get('host')
-    scan_type = data.get('scan_type', 'popular')
-    timeout_val = data.get('timeout', 1)
-
-    if scan_type == 'range':
-        start_port = data.get('start_port')
-        end_port = data.get('end_port')
-        if start_port is None or end_port is None:
-            return jsonify({"error": "start_port and end_port required for range scan"}), 400
-        ports = list(range(int(start_port), int(end_port) + 1))
-    elif scan_type == 'all':
-        ports = list(range(1, 65536))
-    else:
-        # Default/popular ports
-        ports = [21, 22, 23, 25, 53, 80, 110, 135, 139, 143, 443, 445, 993, 995, 3389, 8000, 8080, 8443, 9000, 9001, 9443]
-
-    def run_scan():
-        # Mark scanning in progress so that UI shows "Scanning in progress"
-        with scanner.lock:
-            if host in scanner.hosts:
-                scanner.hosts[host]['port_scan_in_progress'] = True
-            else:
-                # In case the host isn't already in our in-memory store
-                scanner.hosts[host] = {
-                    'mac': '',
-                    'vendor': '',
-                    'ports': [],
-                    'status': 'unknown',
-                    'last_seen': time.time(),
-                    'port_scan_in_progress': True
-                }
-        # Emit an update so the frontend sees the change
-        socketio.emit('scan_update', scanner.get_data())
-
-        # Run the port scan
-        open_ports = scan_ports_for_host(host, ports, timeout=timeout_val)
-
-        # Update in-memory data with results and mark scan as complete
-        with scanner.lock:
-            if host in scanner.hosts:
-                scanner.hosts[host]['ports'] = open_ports
-                scanner.hosts[host]['port_scan_in_progress'] = False
-        # Optionally, update the database here if desired
-
-        # Emit final results so the UI can update immediately
-        socketio.emit('port_scan_result', {'host': host, 'open_ports': open_ports})
-
-    threading.Thread(target=run_scan, daemon=True).start()
-    return jsonify({"status": "Port scan started", "host": host})
-
-@app.route('/api/command/bannergrab', methods=['POST'])
-def api_banner_grab():
-    data = request.get_json()
-    host = data.get('host')
-    port = data.get('port')
-    timeout_val = data.get('timeout', 5)
-    if not host or not port:
-        return jsonify({"error": "host and port are required"}), 400
-    banner = grab_banner(host, int(port), timeout=timeout_val)
-    return jsonify({"host": host, "port": port, "banner": banner})
-
-@app.route('/api/host/update', methods=['POST'])
-def update_host():
-    data = request.get_json()
-    ip = data.get('ip')
-    hostname = data.get('hostname')
-    is_dhcp = data.get('is_dhcp')
-    if not ip:
-        return jsonify({"error": "IP is required"}), 400
-
-    # Query the host from the database.
-    from models import Host
-    db_host = db_session.query(Host).filter_by(ip=ip).first()
-    if not db_host:
-        return jsonify({"error": "Host not found"}), 404
-
-    if hostname is not None:
-        db_host.hostname = hostname
-    if is_dhcp is not None:
-        db_host.is_dhcp = bool(is_dhcp)
-
-    db_session.commit()
-
-    # Also update the in-memory data, if available.
-    if ip in scanner.hosts:
-        if hostname is not None:
-            scanner.hosts[ip]['hostname'] = hostname
-        if is_dhcp is not None:
-            scanner.hosts[ip]['is_dhcp'] = bool(is_dhcp)
-
-    return jsonify({"status": "Host updated", "ip": ip, "hostname": db_host.hostname, "is_dhcp": db_host.is_dhcp})
-
-@app.route('/api/command/maclookup', methods=['POST'])
-@cross_origin()
-def api_maclookup():
-    data = request.get_json()
-    host_ip = data.get('host')
-    if not host_ip:
-        return jsonify({"error": "host is required"}), 400
-
-    # Try to get the host data from memory; if not, fall back to the database.
-    host_data = scanner.hosts.get(host_ip)
-    if host_data:
-        mac = host_data.get('mac')
-    else:
-        db_host = db_session.query(Host).filter_by(ip=host_ip).first()
-        if db_host:
-            mac = db_host.mac
-        else:
-            return jsonify({"error": "Host not found"}), 404
-
-    # Import and call the lookup_vendor function from arp_scanner.
-    from arp_scanner import lookup_vendor
-    vendor = lookup_vendor(mac)
-
-    # Save vendor to in-memory data if available.
-    if host_data:
-        host_data['vendor'] = vendor
-
-    # Update the database record with the found vendor.
-    db_host = db_session.query(Host).filter_by(ip=host_ip).first()
-    if db_host:
-        db_host.vendor = vendor
-        db_session.commit()
-
-    return jsonify({"host": host_ip, "vendor": vendor})
+    return jsonify(scanner.status())
 
 
+@app.post("/api/scanner/sweep")
+def scanner_sweep():
+    if not scanner.settings["network"]:
+        return error("Set a network first")
+    scanner.sweep_now()
+    return jsonify({"queued": True})
 
-def background_thread():
-    while True:
-        socketio.sleep(1)
-        data = scanner.get_data()
-        socketio.emit('scan_update', data)
 
-if __name__ == '__main__':
-    socketio.start_background_task(target=background_thread)
-    socketio.run(app, host='0.0.0.0', port=5000)
+@app.get("/api/network/detect")
+def network_detect():
+    network, iface, ip = detect_network()
+    if not network:
+        return error("Could not detect the local network", 404)
+    return jsonify({"network": network, "iface": iface, "ip": ip})
+
+
+# ------------------------------------------------------------------- settings
+
+@app.get("/api/settings")
+def get_settings():
+    return jsonify(settings_store.load())
+
+
+@app.put("/api/settings")
+@app.patch("/api/settings")
+def put_settings():
+    body = request.get_json(silent=True) or {}
+    try:
+        if "network" in body and body["network"]:
+            import ipaddress
+            body["network"] = str(ipaddress.ip_network(str(body["network"]).strip(), strict=False))
+        new = settings_store.save(body)
+    except ValueError as exc:
+        return error(str(exc))
+    scanner.apply_settings(new)
+    socketio.emit("settings", new)
+    socketio.emit("scanner", scanner.status())
+    return jsonify(new)
+
+
+@app.post("/api/settings/test_webhook")
+def test_webhook():
+    from notify import send_webhook
+    url = settings_store.load()["webhook_url"]
+    if not url:
+        return error("No webhook URL configured")
+    send_webhook(url, {"source": "spynet", "event": {"kind": "test", "message": "Spynet webhook test"}, "device": None})
+    return jsonify({"sent": True})
+
+
+# ------------------------------------------------------------------- sockets
+
+@socketio.on("connect")
+def on_connect():
+    socketio.emit("scanner", scanner.status(), to=request.sid)
+
+
+def _shutdown(*_args):
+    log.info("Shutting down")
+    scanner.shutdown()
+    sys.exit(0)
+
+
+def main():
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+    cfg = settings_store.load()
+    if cfg["auto_start"] and cfg["network"]:
+        try:
+            scanner.start(cfg["network"])
+        except ValueError as exc:
+            log.error("auto-start failed: %s", exc)
+    log.info("Spynet listening on http://%s:%d", config.HOST, config.PORT)
+    socketio.run(app, host=config.HOST, port=config.PORT, allow_unsafe_werkzeug=True)
+
+
+if __name__ == "__main__":
+    main()
