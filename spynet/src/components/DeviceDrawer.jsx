@@ -3,8 +3,9 @@ import { deviceLabel, formatDateTime, guessType, timeAgo, TYPE_LABELS } from '..
 import { CloseIcon, TypeIcon, EVENT_GLYPH } from './Icons.jsx';
 import { formatTime, dayLabel } from '../format.js';
 import { messageFor } from './ActivityFeed.jsx';
+import PresenceStrip, { uptimePercent } from './PresenceStrip.jsx';
 
-export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onClose }) {
+export default function DeviceDrawer({ device: d, deviceTypes, presence, networks, now, actions, onClose }) {
   const [name, setName] = useState(d.name);
   const [notes, setNotes] = useState(d.notes);
   const [type, setType] = useState(d.device_type);
@@ -13,6 +14,8 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
   const [banners, setBanners] = useState({});
   const [history, setHistory] = useState([]);
   const [confirmForget, setConfirmForget] = useState(false);
+  const [window_, setWindow] = useState(24);
+  const [weekSpans, setWeekSpans] = useState(null);
 
   const dirty = name !== d.name || notes !== d.notes || type !== d.device_type;
 
@@ -21,6 +24,13 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
     actions.fetchDevice(d.mac).then((full) => { if (alive && full) setHistory(full.events || []); }).catch(() => {});
     return () => { alive = false; };
   }, [d.mac, d.last_seen, d.ports_scanned_at, actions]);
+
+  useEffect(() => {
+    if (window_ === 24) return undefined;
+    let alive = true;
+    actions.fetchPresence(d.mac, window_).then((r) => { if (alive) setWeekSpans(r[d.mac] || []); }).catch(() => {});
+    return () => { alive = false; };
+  }, [window_, d.mac, d.online, actions]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -38,6 +48,9 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
   const startScan = () => actions.portScan(d.mac, scanMode === 'range' ? { mode: 'range', ...range } : { mode: scanMode });
 
   const effectiveType = guessType(d);
+  const dev = d.port_deviation;
+  const unexpected = new Set(dev ? dev.unexpected : []);
+  const deviates = !!dev && (dev.unexpected.length > 0 || dev.missing.length > 0);
 
   return (
     <aside className="drawer" aria-label={`Details for ${deviceLabel(d)}`}>
@@ -69,13 +82,40 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
         <dl className="facts">
           <div><dt>IP address</dt><dd className="mono">{d.ip || '—'}{d.previous_ip && <span className="faint"> (was {d.previous_ip})</span>}</dd></div>
           <div><dt>MAC address</dt><dd className="mono">{d.mac}</dd></div>
+          {d.other_ips && d.other_ips.length > 0 && (
+            <div className="span2">
+              <dt>Also answers for</dt>
+              <dd className="mono">{d.other_ips.join(', ')}</dd>
+              <dd className="faint small">Routers often answer for a second address or for unused ones. Only the lowest address is treated as this device's own.</dd>
+            </div>
+          )}
           <div><dt>Vendor</dt><dd>{d.vendor || <span className="faint">unknown</span>}</dd></div>
           <div><dt>Hostname</dt><dd>{d.hostname || <span className="faint">none announced</span>}</dd></div>
+          {networks && networks.length > 1 && <div><dt>Network</dt><dd className="mono">{d.network || <span className="faint">outside watched networks</span>}</dd></div>}
         </dl>
         <div className="row gap">
           <button className="btn small" onClick={() => actions.refreshDevice(d.mac)}>Look up name and vendor again</button>
           {d.known && <button className="btn small quiet" onClick={toggleKnown}>Mark as unrecognized</button>}
         </div>
+
+        <section>
+          <div className="section-head">
+            <h3>Presence</h3>
+            <div className="segmented small">
+              <button type="button" className={window_ === 24 ? 'active' : ''} onClick={() => setWindow(24)}>24 h</button>
+              <button type="button" className={window_ === 168 ? 'active' : ''} onClick={() => setWindow(168)}>7 days</button>
+            </div>
+          </div>
+          {(() => {
+            const spans = window_ === 24 ? presence : (weekSpans || presence);
+            return (
+              <>
+                <PresenceStrip spans={spans} hours={window_} now={now} height={14} ticks />
+                <p className="faint small">Online {uptimePercent(spans, window_, now)}% of the last {window_ === 24 ? '24 hours' : '7 days'}. Gaps while Spynet itself was not running show as offline.</p>
+              </>
+            );
+          })()}
+        </section>
 
         <section>
           <h3>Identity</h3>
@@ -107,9 +147,10 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
             ) : (
               <ul className="services">
                 {d.services.map((s) => (
-                  <li key={s.port}>
+                  <li key={s.port} className={unexpected.has(s.port) ? 'unexpected' : ''}>
                     <div className="service-row">
                       <span className="mono port">{s.port}</span>
+                      {unexpected.has(s.port) && <span className="tag new">Not in baseline</span>}
                       <span className="service-name">{s.name || <span className="faint">unknown service</span>}</span>
                       {isWeb(s.port) && <a className="btn small quiet" href={`${isTls(s.port) ? 'https' : 'http'}://${d.ip}:${s.port}`} target="_blank" rel="noreferrer">Open</a>}
                       <button className="btn small quiet" onClick={() => readBanner(s.port)} disabled={banners[s.port]?.loading}>
@@ -121,7 +162,26 @@ export default function DeviceDrawer({ device: d, deviceTypes, now, actions, onC
                 ))}
               </ul>
             )}
+          {dev && dev.missing.length > 0 && (
+            <p className="missing-line">Expected but closed: <span className="mono">{dev.missing.join(', ')}</span></p>
+          )}
           {d.ports_scanned_at && d.services.length > 0 && <p className="faint small">Checked {timeAgo(d.ports_scanned_at, now)}.</p>}
+          <div className="baseline-line">
+            {dev === null ? (
+              <>
+                <span className="faint small">No baseline yet: every change is reported.</span>
+                <button className="btn small" onClick={() => actions.acceptBaseline(d.mac)} disabled={!d.ports_scanned_at}>Accept current ports as baseline</button>
+              </>
+            ) : (
+              <>
+                <span className={`small ${deviates ? 'attention-text' : 'faint'}`}>
+                  {deviates ? 'Differs from the accepted baseline.' : `Matches the baseline (${d.baseline_ports.length} port${d.baseline_ports.length === 1 ? '' : 's'}).`}
+                </span>
+                {deviates && <button className="btn small" onClick={() => actions.acceptBaseline(d.mac)}>Accept current ports</button>}
+                <button className="btn small quiet" onClick={() => actions.clearBaseline(d.mac)}>Clear baseline</button>
+              </>
+            )}
+          </div>
           <div className="row gap wrap">
             <select value={scanMode} onChange={(e) => setScanMode(e.target.value)} aria-label="Scan type">
               <option value="quick">Common ports (fast)</option>

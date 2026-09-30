@@ -14,7 +14,7 @@ from flask_socketio import SocketIO
 import config
 import settings as settings_store
 from db import init_db, session_scope
-from discovery import detect_network
+from discovery import detect_network, local_interfaces
 from models import Device, Event
 from port_scanner import grab_banner, service_name
 from scanner import NetworkScanner
@@ -80,6 +80,7 @@ def state():
     return jsonify({
         "devices": scanner.all_devices(),
         "events": events,
+        "presence": scanner.presence_spans(24),
         "scanner": scanner.status(),
         "settings": settings_store.load(),
         "device_types": DEVICE_TYPES,
@@ -205,6 +206,39 @@ def device_banner(mac):
     return jsonify({"mac": mac, "ip": ip, "port": port, "service": service_name(port), "banner": banner})
 
 
+@app.post("/api/devices/<mac>/baseline")
+def device_baseline(mac):
+    """{"mode": "current"} accepts the open ports as expected; {"mode": "clear"} removes the baseline;
+    {"ports": [..]} sets an explicit list."""
+    body = request.get_json(silent=True) or {}
+    mode = body.get("mode", "current")
+    with session_scope() as s:
+        d = find_device(s, mac)
+        if d is None:
+            return error("Device not found", 404)
+        mac = d.mac
+        current = d.ports
+    if "ports" in body:
+        try:
+            ports = sorted({int(p) for p in body["ports"]})
+        except (TypeError, ValueError):
+            return error("ports must be a list of numbers")
+    elif mode == "clear":
+        ports = None
+    elif mode == "current":
+        ports = current
+    else:
+        return error("mode must be current or clear")
+    return jsonify(scanner.set_baseline(mac, ports))
+
+
+@app.get("/api/presence")
+def presence():
+    hours = max(1, min(int(request.args.get("hours", 24)), 24 * 90))
+    mac = request.args.get("mac")
+    return jsonify(scanner.presence_spans(hours, normalize_mac(mac) if mac else None))
+
+
 @app.post("/api/devices/<mac>/refresh")
 def device_refresh(mac):
     if not scanner.refresh_device(normalize_mac(mac)):
@@ -286,9 +320,10 @@ def scanner_sweep():
 @app.get("/api/network/detect")
 def network_detect():
     network, iface, ip = detect_network()
-    if not network:
+    interfaces = local_interfaces()
+    if not network and not interfaces:
         return error("Could not detect the local network", 404)
-    return jsonify({"network": network, "iface": iface, "ip": ip})
+    return jsonify({"network": network, "iface": iface, "ip": ip, "interfaces": interfaces})
 
 
 # ------------------------------------------------------------------- settings
@@ -303,9 +338,6 @@ def get_settings():
 def put_settings():
     body = request.get_json(silent=True) or {}
     try:
-        if "network" in body and body["network"]:
-            import ipaddress
-            body["network"] = str(ipaddress.ip_network(str(body["network"]).strip(), strict=False))
         new = settings_store.save(body)
     except ValueError as exc:
         return error(str(exc))

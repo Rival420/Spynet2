@@ -1,5 +1,6 @@
 """The scanning engine: periodic ARP sweeps for presence, a queue-driven port
-scanner, background vendor/hostname enrichment and an event log."""
+scanner, background vendor/hostname enrichment, presence spans and an event
+log."""
 import ipaddress
 import json
 import logging
@@ -11,14 +12,16 @@ from datetime import timedelta
 import settings as settings_store
 import vendor
 from db import session_scope
-from discovery import RawSocketPermissionError, arp_sweep, detect_network, resolve_hostname
-from models import Device, Event, iso, utcnow
+from discovery import RawSocketPermissionError, arp_sweep, interface_for, local_interfaces, resolve_hostname
+from models import Device, Event, Presence, iso, utcnow
 from notify import send_webhook
 from port_scanner import ports_for_mode, scan_ports, service_name
 
 log = logging.getLogger("spynet.scanner")
 
 HOSTNAME_RECHECK = timedelta(hours=24)
+NO_INTERFACE = ("This machine has no interface on this network, so ARP cannot reach it. "
+                "Add a VLAN interface (e.g. eth0.20) or remove the network.")
 
 
 def display_name(d):
@@ -31,9 +34,11 @@ class NetworkScanner:
         self.settings = settings_store.load()
         self.state = "stopped"                # stopped | running | paused
         self.lock = threading.RLock()
+        self.interfaces = []                  # local interfaces (from discovery)
         self.iface = ""
         self.local_ip = ""
-        self.local_mac = ""
+        self.local_macs = set()
+        self.network_warnings = {}            # network -> human readable problem
         self.last_sweep_at = None
         self.next_sweep_at = None
         self.last_sweep_duration = 0.0
@@ -53,30 +58,34 @@ class NetworkScanner:
         self._enrich_q = queue.Queue()
         self._enrich_queued = set()
 
+        self._close_dangling_spans()
+        self._detect_self()
         threading.Thread(target=self._port_worker, daemon=True, name="portscan").start()
         threading.Thread(target=self._enrich_worker, daemon=True, name="enrich").start()
 
     # ------------------------------------------------------------------ control
 
+    @property
+    def networks(self):
+        return settings_store.parse_networks(self.settings.get("network", ""))
+
     def apply_settings(self, new_settings):
         with self.lock:
             self.settings = new_settings
+        self._detect_self()
         self._wake.set()
 
     def start(self, network=None):
         network = (network or self.settings["network"] or "").strip()
         if not network:
-            network, self.iface, self.local_ip = detect_network()
+            self._detect_self()
+            network = next((i["network"] for i in self.interfaces if i["iface"] == self.iface), "")
             if not network:
                 raise ValueError("Could not detect the local network. Enter it as CIDR, e.g. 192.168.1.0/24.")
-        try:
-            net = ipaddress.ip_network(network, strict=False)
-        except ValueError as exc:
-            raise ValueError(f"'{network}' is not a valid network. Use CIDR, e.g. 192.168.1.0/24.") from exc
-        if net.num_addresses > 65536:
-            raise ValueError("Networks larger than /16 are not supported.")
-        network = str(net)
-        self.settings = settings_store.save({"network": network, "auto_start": True})
+        networks = settings_store.parse_networks(network)   # raises ValueError with a clear message
+        if not networks:
+            raise ValueError("Enter at least one network in CIDR form, e.g. 192.168.1.0/24.")
+        self.settings = settings_store.save({"network": ", ".join(networks), "auto_start": True})
         self._detect_self()
         with self.lock:
             self.last_error = ""
@@ -86,7 +95,7 @@ class NetworkScanner:
                 self._loop_thread = threading.Thread(target=self._loop, daemon=True, name="sweep")
                 self._loop_thread.start()
         self._wake.set()
-        self._log_scanner_event(f"Started watching {network}")
+        self._log_scanner_event(f"Started watching {', '.join(networks)}")
         self.emit("scanner", self.status())
 
     def pause(self):
@@ -129,13 +138,23 @@ class NetworkScanner:
     # -------------------------------------------------------------------- loop
 
     def _detect_self(self):
+        interfaces = local_interfaces()
+        iface, ip = "", ""
         try:
-            from scapy.all import conf, get_if_addr, get_if_hwaddr
-            self.iface = conf.route.route("0.0.0.0")[0]
-            self.local_ip = get_if_addr(self.iface)
-            self.local_mac = get_if_hwaddr(self.iface).lower()
+            from scapy.all import conf, get_if_addr
+            iface = str(conf.route.route("0.0.0.0")[0])
+            ip = get_if_addr(iface)
         except Exception as exc:  # pragma: no cover
-            log.debug("could not detect local interface: %s", exc)
+            log.debug("could not detect default interface: %s", exc)
+        warnings = {}
+        for net in self.networks:
+            if interface_for(net, interfaces) is None:
+                warnings[net] = NO_INTERFACE
+        with self.lock:
+            self.interfaces = interfaces
+            self.iface, self.local_ip = iface, ip
+            self.local_macs = {i["mac"] for i in interfaces if i["mac"]}
+            self.network_warnings = warnings
 
     def _loop(self):
         while not self._stop.is_set():
@@ -175,21 +194,21 @@ class NetworkScanner:
 
     def sweep(self):
         cfg = self.settings
-        network = cfg["network"]
-        if not network:
+        networks = self.networks
+        if not networks:
             raise ValueError("No network configured")
         started = time.time()
         with self.lock:
             self.sweeping = True
         self.emit("scanner", self.status())
 
-        found = arp_sweep(network, timeout=cfg["arp_timeout"])
-        if self.local_ip and self.local_mac:
-            try:
-                if ipaddress.ip_address(self.local_ip) in ipaddress.ip_network(network, strict=False):
-                    found.append({"ip": self.local_ip, "mac": self.local_mac})
-            except ValueError:
-                pass
+        found = []
+        for net in networks:
+            local = interface_for(net, self.interfaces)
+            found.extend(arp_sweep(net, timeout=cfg["arp_timeout"], iface=local["iface"] if local else None))
+            if local and local["mac"]:
+                # The scanning machine never answers its own ARP request.
+                found.append({"ip": local["ip"], "mac": local["mac"]})
 
         now = utcnow()
         offline_after = timedelta(seconds=cfg["offline_after"])
@@ -198,24 +217,32 @@ class NetworkScanner:
         to_enrich, to_scan = [], []   # queued after commit so workers can see the rows
         with session_scope() as s:
             devices = {d.mac: d for d in s.query(Device).all()}
-            seen = set()
+            replies = {}
             for host in found:
-                mac, ip = host["mac"], host["ip"]
-                if mac in seen:
-                    continue
-                seen.add(mac)
+                replies.setdefault(host["mac"], set()).add(host["ip"])
+            seen = set(replies)
+            for mac, ips in replies.items():
+                # A MAC answering for several IPs (router secondary address,
+                # proxy ARP) keeps the lowest one as its address and the rest
+                # as aliases, so it never flips between them.
+                ordered = sorted(ips, key=lambda x: ipaddress.ip_address(x))
+                ip, aliases = ordered[0], ordered[1:]
                 d = devices.get(mac)
                 if d is None:
                     d = Device(mac=mac, ip=ip, vendor=vendor.cached_vendor(mac), online=True,
                                first_seen=now, last_seen=now)
+                    d.other_ips = aliases[:32]
                     s.add(d)
                     devices[mac] = d
+                    s.add(Presence(mac=mac, started_at=now))
                     label = d.vendor or "unknown vendor"
                     new_events.append(self._event(s, "new_device", d,
                                                   f"New device {ip} ({label})", {"vendor": d.vendor}))
                     to_enrich.append(mac)
                     to_scan.append(mac)
                     continue
+                if d.other_ips != aliases[:32]:
+                    d.other_ips = aliases[:32]
                 if ip and d.ip != ip:
                     if d.ip:
                         new_events.append(self._event(s, "ip_change", d,
@@ -225,6 +252,7 @@ class NetworkScanner:
                     d.ip = ip
                 if not d.online:
                     d.online = True
+                    s.add(Presence(mac=mac, started_at=now))
                     new_events.append(self._event(s, "online", d, f"{display_name(d)} is online"))
                 d.last_seen = now
                 if not d.vendor or not d.hostname and (
@@ -240,6 +268,7 @@ class NetworkScanner:
                     continue
                 if d.last_seen is None or now - d.last_seen > offline_after:
                     d.online = False
+                    self._close_span(s, mac, d.last_seen or now)
                     new_events.append(self._event(s, "offline", d, f"{display_name(d)} went offline"))
             s.flush()
             snapshot = [self._device_dict(d) for d in devices.values()]
@@ -263,6 +292,38 @@ class NetworkScanner:
             self.emit("event", ev)
             self._maybe_notify(ev)
         self.emit("scanner", self.status())
+
+    # ---------------------------------------------------------------- presence
+
+    def _close_span(self, s, mac, at):
+        span = (s.query(Presence).filter_by(mac=mac, ended_at=None)
+                .order_by(Presence.id.desc()).first())
+        if span is not None:
+            span.ended_at = max(at, span.started_at)
+
+    def _close_dangling_spans(self):
+        """After a restart nothing was watching; end open spans at last_seen."""
+        with session_scope() as s:
+            open_spans = s.query(Presence).filter_by(ended_at=None).all()
+            if not open_spans:
+                return
+            last = {d.mac: d.last_seen for d in s.query(Device).all()}
+            for span in open_spans:
+                span.ended_at = max(last.get(span.mac) or span.started_at, span.started_at)
+            s.query(Device).update({"online": False})
+        log.info("Closed %d presence spans left open by the previous run", len(open_spans))
+
+    def presence_spans(self, hours=24, mac=None):
+        """{mac: [[start_iso, end_iso|None], ...]} for spans overlapping the window."""
+        since = utcnow() - timedelta(hours=hours)
+        out = {}
+        with session_scope() as s:
+            q = s.query(Presence).filter((Presence.ended_at == None) | (Presence.ended_at >= since))  # noqa: E711
+            if mac:
+                q = q.filter_by(mac=mac)
+            for span in q.order_by(Presence.started_at):
+                out.setdefault(span.mac, []).append(span.to_pair())
+        return out
 
     # ------------------------------------------------------------------ events
 
@@ -289,6 +350,8 @@ class NetworkScanner:
         }
         if not cfg["webhook_url"] or not wanted.get(ev["kind"]):
             return
+        if ev["kind"] == "ports_changed" and ev["details"].get("baseline") and not ev["details"].get("deviation"):
+            return   # change stays within the accepted baseline
         device = None
         if ev["mac"]:
             with session_scope() as s:
@@ -299,11 +362,10 @@ class NetworkScanner:
     # -------------------------------------------------------------- port scans
 
     def _queue_port_scan(self, mac, mode=None, start=None, end=None):
-        key = mac
         with self.lock:
-            if key in self._port_queued or key in self.scanning:
+            if mac in self._port_queued or mac in self.scanning:
                 return False
-            self._port_queued.add(key)
+            self._port_queued.add(mac)
         self._port_q.put((mac, mode, start, end))
         return True
 
@@ -314,6 +376,18 @@ class NetworkScanner:
         if queued:
             self.emit("device", self._device_dict_by_mac(mac))
         return queued
+
+    def set_baseline(self, mac, ports):
+        """ports=None clears the baseline; a list accepts exactly those ports."""
+        with session_scope() as s:
+            d = s.query(Device).filter_by(mac=mac).first()
+            if d is None:
+                return None
+            d.baseline_ports = ports
+            s.flush()
+            payload = self._device_dict(d)
+        self.emit("device", payload)
+        return payload
 
     def _port_worker(self):
         while True:
@@ -362,13 +436,23 @@ class NetworkScanner:
             d.ports = merged
             d.ports_scanned_at = utcnow()
             if not first_scan and (opened or closed):
+                baseline = d.baseline_ports
+                details = {"opened": opened, "closed": closed, "baseline": baseline is not None}
                 parts = []
                 if opened:
                     parts.append("opened " + ", ".join(map(str, opened)))
                 if closed:
                     parts.append("closed " + ", ".join(map(str, closed)))
-                ev = self._event(s, "ports_changed", d, f"{display_name(d)} {'; '.join(parts)}",
-                                 {"opened": opened, "closed": closed})
+                message = f"{display_name(d)} {'; '.join(parts)}"
+                if baseline is not None:
+                    base = set(baseline)
+                    unexpected = sorted(merged - base)
+                    missing = sorted(base - merged)
+                    details.update({"unexpected": unexpected, "missing": missing,
+                                    "deviation": bool(set(opened) - base or set(closed) & base)})
+                    if not details["deviation"]:
+                        message += " (within baseline)"
+                ev = self._event(s, "ports_changed", d, message, details)
                 s.flush()
                 ev_dict = ev.to_dict()
         if ev_dict:
@@ -429,12 +513,31 @@ class NetworkScanner:
 
     # ------------------------------------------------------------------- views
 
+    def _network_of(self, ip):
+        if not ip:
+            return ""
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return ""
+        for net in self.networks:
+            if addr in ipaddress.ip_network(net, strict=False):
+                return net
+        return ""
+
     def _device_dict(self, d):
         data = d.to_dict()
         data["scanning"] = d.mac in self.scanning
         data["scan_queued"] = d.mac in self._port_queued
-        data["is_self"] = bool(self.local_mac) and d.mac == self.local_mac
+        data["is_self"] = d.mac in self.local_macs
+        data["network"] = self._network_of(d.ip)
         data["services"] = [{"port": p, "name": service_name(p)} for p in data["ports"]]
+        baseline = d.baseline_ports
+        if baseline is None:
+            data["port_deviation"] = None
+        else:
+            current, base = set(d.ports), set(baseline)
+            data["port_deviation"] = {"unexpected": sorted(current - base), "missing": sorted(base - current)}
         return data
 
     def _device_dict_by_mac(self, mac):
@@ -451,6 +554,9 @@ class NetworkScanner:
             return {
                 "state": self.state,
                 "network": self.settings["network"],
+                "networks": self.networks,
+                "network_warnings": dict(self.network_warnings),
+                "interfaces": list(self.interfaces),
                 "iface": self.iface,
                 "local_ip": self.local_ip,
                 "sweeping": self.sweeping,

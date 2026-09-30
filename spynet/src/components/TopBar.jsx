@@ -40,15 +40,19 @@ function StatusLine({ scanner, connected }) {
   if (!connected) return <p className="status warn">Reconnecting to the server…</p>;
   if (!scanner) return <p className="status">Loading…</p>;
   if (scanner.last_error) return <p className="status error">{scanner.last_error}</p>;
+  const warned = Object.keys(scanner.network_warnings || {});
+  const nets = scanner.networks && scanner.networks.length ? scanner.networks : [scanner.network].filter(Boolean);
+  const netLabel = nets.length <= 2 ? nets.join(', ') : `${nets[0]} +${nets.length - 1}`;
   if (scanner.state === 'stopped') {
-    return <p className="status">{scanner.network ? `Not watching ${scanner.network}` : 'No network chosen yet'}</p>;
+    return <p className="status">{nets.length ? `Not watching ${netLabel}` : 'No network chosen yet'}</p>;
   }
   const found = scanner.sweep_count ? `${scanner.last_sweep_found} answered last sweep` : 'first sweep pending';
   return (
     <p className="status">
       {scanner.state === 'paused' ? 'Paused on ' : 'Watching '}
-      <span className="mono">{scanner.network}</span>
+      <span className="mono">{netLabel}</span>
       {' · '}{found}
+      {warned.length > 0 && <span className="warn"> · no interface on {warned.join(', ')}</span>}
       {scanner.port_queue > 0 && ` · ${scanner.port_queue} port scan${scanner.port_queue === 1 ? '' : 's'} queued`}
     </p>
   );

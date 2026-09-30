@@ -7,6 +7,7 @@ const MAX_EVENTS = 500;
 export function useSpynet() {
   const [devices, setDevices] = useState({});
   const [events, setEvents] = useState([]);
+  const [presence, setPresence] = useState({});
   const [scanner, setScanner] = useState(null);
   const [settings, setSettings] = useState(null);
   const [deviceTypes, setDeviceTypes] = useState(['']);
@@ -19,6 +20,7 @@ export function useSpynet() {
       const s = await api.get('/api/state');
       setDevices(Object.fromEntries(s.devices.map((d) => [d.mac, d])));
       setEvents(s.events);
+      setPresence(s.presence || {});
       setScanner(s.scanner);
       setSettings(s.settings);
       setDeviceTypes(s.device_types);
@@ -27,6 +29,15 @@ export function useSpynet() {
       setLoadError(e.message);
     }
   }, []);
+
+  const loadPresence = useCallback(async () => {
+    try { setPresence(await api.get('/api/presence?hours=24')); } catch { /* keep the old strip */ }
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(loadPresence, 60000);
+    return () => clearInterval(t);
+  }, [loadPresence]);
 
   useEffect(() => {
     load();
@@ -42,14 +53,17 @@ export function useSpynet() {
         return next;
       });
     });
-    socket.on('event', (ev) => setEvents((prev) => [ev, ...prev].slice(0, MAX_EVENTS)));
+    socket.on('event', (ev) => {
+      setEvents((prev) => [ev, ...prev].slice(0, MAX_EVENTS));
+      if (ev.kind === 'online' || ev.kind === 'offline' || ev.kind === 'new_device') loadPresence();
+    });
     socket.on('events_cleared', () => setEvents([]));
     socket.on('scanner', setScanner);
     socket.on('settings', setSettings);
     return () => socket.disconnect();
-  }, [load]);
+  }, [load, loadPresence]);
 
-  return { devices, events, scanner, settings, deviceTypes, connected, loadError, reload: load };
+  return { devices, events, presence, scanner, settings, deviceTypes, connected, loadError, reload: load };
 }
 
 export function useNow(intervalMs = 1000) {

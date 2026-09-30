@@ -1,5 +1,7 @@
 """Persisted scanner settings (key/value in SQLite) with typed defaults."""
+import ipaddress
 import json
+import re
 
 import config
 from db import session_scope
@@ -34,6 +36,25 @@ BOUNDS = {
 }
 
 
+def parse_networks(value):
+    """'192.168.1.0/24, 10.0.0.0/24' -> ['192.168.1.0/24', '10.0.0.0/24'] (validated)."""
+    out = []
+    for token in re.split(r"[\s,;]+", str(value or "").strip()):
+        if not token:
+            continue
+        try:
+            net = ipaddress.ip_network(token, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"'{token}' is not a valid network. Use CIDR, e.g. 192.168.1.0/24.") from exc
+        if net.version != 4:
+            raise ValueError("Only IPv4 networks are supported.")
+        if net.num_addresses > 65536:
+            raise ValueError(f"{net} is larger than a /16; that would never finish on a Pi.")
+        if str(net) not in out:
+            out.append(str(net))
+    return out
+
+
 def _coerce(key, value):
     default = DEFAULTS[key]
     if isinstance(default, bool):
@@ -49,6 +70,8 @@ def _coerce(key, value):
     if key in BOUNDS:
         lo, hi = BOUNDS[key]
         value = max(lo, min(hi, value))
+    if key == "network":
+        value = ", ".join(parse_networks(value))
     return value
 
 

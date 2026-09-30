@@ -42,14 +42,52 @@ def detect_network():
         return "", "", ""
 
 
-def arp_sweep(network, timeout=2):
-    """Return a list of {'ip', 'mac'} for hosts answering ARP on `network`."""
+def local_interfaces():
+    """Every IPv4-configured interface: [{iface, ip, network, mac}]."""
+    out = []
+    try:
+        import psutil
+        for iface, addrs in psutil.net_if_addrs().items():
+            mac = next((a.address.lower() for a in addrs if a.family == psutil.AF_LINK and a.address), "")
+            for a in addrs:
+                if a.family != socket.AF_INET or a.address.startswith("127."):
+                    continue
+                try:
+                    net = ipaddress.ip_network(f"{a.address}/{a.netmask or '24'}", strict=False)
+                except ValueError:
+                    continue
+                out.append({"iface": iface, "ip": a.address, "network": str(net),
+                            "mac": mac if len(mac) == 17 else ""})
+    except Exception as exc:  # pragma: no cover
+        log.debug("interface enumeration failed: %s", exc)
+    return out
+
+
+def interface_for(network, interfaces=None):
+    """The local interface attached to `network`, or None if the host is not on it."""
+    try:
+        target = ipaddress.ip_network(network, strict=False)
+    except ValueError:
+        return None
+    for entry in interfaces if interfaces is not None else local_interfaces():
+        local = ipaddress.ip_network(entry["network"], strict=False)
+        if target.subnet_of(local) or local.subnet_of(target) or ipaddress.ip_address(entry["ip"]) in target:
+            return entry
+    return None
+
+
+def arp_sweep(network, timeout=2, iface=None):
+    """Return a list of {'ip', 'mac'} for every ARP reply on `network`.
+
+    The same MAC may appear with several IPs: routers commonly answer for a
+    secondary address or proxy-ARP for unused ones. The caller decides which
+    address is the primary one."""
     from scapy.all import ARP, Ether, srp
     try:
-        answered, _ = srp(
-            Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=network),
-            timeout=timeout, retry=1, verbose=0,
-        )
+        kwargs = {"timeout": timeout, "retry": 1, "verbose": 0}
+        if iface:
+            kwargs["iface"] = iface
+        answered, _ = srp(Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=network), **kwargs)
     except PermissionError as exc:
         raise RawSocketPermissionError(
             "Raw socket access denied. Run as root or grant CAP_NET_RAW/CAP_NET_ADMIN."
@@ -60,12 +98,15 @@ def arp_sweep(network, timeout=2):
                 "Raw socket access denied. Run as root or grant CAP_NET_RAW/CAP_NET_ADMIN."
             ) from exc
         raise
-    seen = {}
+    seen = set()
+    replies = []
     for _sent, received in answered:
         mac = received.hwsrc.lower()
-        if mac and mac != "00:00:00:00:00:00":
-            seen[mac] = {"ip": received.psrc, "mac": mac}
-    return list(seen.values())
+        if not mac or mac == "00:00:00:00:00:00" or (mac, received.psrc) in seen:
+            continue
+        seen.add((mac, received.psrc))
+        replies.append({"ip": received.psrc, "mac": mac})
+    return replies
 
 
 # --- hostname resolution ---------------------------------------------------

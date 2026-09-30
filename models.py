@@ -26,6 +26,7 @@ class Device(Base):
     mac = Column(String(17), unique=True, nullable=False, index=True)
     ip = Column(String(45), default="")
     previous_ip = Column(String(45), default="")
+    other_ips_json = Column(Text, default="[]")     # further IPs this MAC answers for
     vendor = Column(String(120), default="")
     hostname = Column(String(255), default="")      # discovered (rDNS / mDNS / NetBIOS)
     name = Column(String(120), default="")          # chosen by the user
@@ -36,6 +37,7 @@ class Device(Base):
     first_seen = Column(DateTime, default=utcnow)
     last_seen = Column(DateTime, default=utcnow)
     ports_json = Column(Text, default="[]")
+    baseline_ports_json = Column(Text, nullable=True)  # accepted set of open ports, None = no baseline
     ports_scanned_at = Column(DateTime, nullable=True)
     hostname_checked_at = Column(DateTime, nullable=True)
 
@@ -50,11 +52,36 @@ class Device(Base):
     def ports(self, value):
         self.ports_json = json.dumps(sorted({int(p) for p in value}))
 
+    @property
+    def baseline_ports(self):
+        if self.baseline_ports_json is None:
+            return None
+        try:
+            return sorted({int(p) for p in json.loads(self.baseline_ports_json)})
+        except (ValueError, TypeError):
+            return None
+
+    @baseline_ports.setter
+    def baseline_ports(self, value):
+        self.baseline_ports_json = None if value is None else json.dumps(sorted({int(p) for p in value}))
+
+    @property
+    def other_ips(self):
+        try:
+            return list(json.loads(self.other_ips_json or "[]"))
+        except (ValueError, TypeError):
+            return []
+
+    @other_ips.setter
+    def other_ips(self, value):
+        self.other_ips_json = json.dumps(list(value))
+
     def to_dict(self):
         return {
             "mac": self.mac,
             "ip": self.ip or "",
             "previous_ip": self.previous_ip or "",
+            "other_ips": self.other_ips,
             "vendor": self.vendor or "",
             "hostname": self.hostname or "",
             "name": self.name or "",
@@ -65,6 +92,7 @@ class Device(Base):
             "first_seen": iso(self.first_seen),
             "last_seen": iso(self.last_seen),
             "ports": self.ports,
+            "baseline_ports": self.baseline_ports,
             "ports_scanned_at": iso(self.ports_scanned_at),
         }
 
@@ -94,6 +122,19 @@ class Event(Base):
             "message": self.message or "",
             "details": details,
         }
+
+
+class Presence(Base):
+    """One row per stretch of time a device was online."""
+    __tablename__ = "presence"
+
+    id = Column(Integer, primary_key=True)
+    mac = Column(String(17), index=True, nullable=False)
+    started_at = Column(DateTime, index=True, nullable=False)
+    ended_at = Column(DateTime, nullable=True)   # None while the device is still online
+
+    def to_pair(self):
+        return [iso(self.started_at), iso(self.ended_at)]
 
 
 class Setting(Base):

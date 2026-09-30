@@ -47,7 +47,26 @@ def session_scope():
 
 def init_db():
     Base.metadata.create_all(engine)
+    _add_missing_columns()
     _migrate_legacy_hosts()
+
+
+def _add_missing_columns():
+    """SQLite create_all never alters existing tables; add new columns here."""
+    insp = inspect(engine)
+    for table in Base.metadata.sorted_tables:
+        if table.name not in insp.get_table_names():
+            continue
+        existing = {c["name"] for c in insp.get_columns(table.name)}
+        for col in table.columns:
+            if col.name in existing:
+                continue
+            ddl = f"ALTER TABLE {table.name} ADD COLUMN {col.name} {col.type.compile(engine.dialect)}"
+            if col.default is not None and not callable(col.default.arg):
+                ddl += f" DEFAULT {repr(col.default.arg)}"
+            with engine.begin() as conn:
+                conn.execute(text(ddl))
+            log.info("Added column %s.%s", table.name, col.name)
 
 
 def _migrate_legacy_hosts():

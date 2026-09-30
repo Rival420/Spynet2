@@ -4,6 +4,7 @@ import { CloseIcon } from './Icons.jsx';
 export default function SettingsDialog({ settings, scanner, firstRun, actions, onClose }) {
   const [form, setForm] = useState({ ...settings });
   const [detecting, setDetecting] = useState(false);
+  const [interfaces, setInterfaces] = useState(scanner && scanner.interfaces ? scanner.interfaces : []);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -21,7 +22,10 @@ export default function SettingsDialog({ settings, scanner, firstRun, actions, o
   const detect = async () => {
     setDetecting(true);
     const r = await actions.detectNetwork();
-    if (r) set('network', r.network);
+    if (r) {
+      if (r.interfaces) setInterfaces(r.interfaces);
+      if (r.network && !form.network) set('network', r.network);
+    }
     setDetecting(false);
   };
 
@@ -48,13 +52,28 @@ export default function SettingsDialog({ settings, scanner, firstRun, actions, o
           <section>
             <h3>Network</h3>
             <label className="field">
-              <span>Network to watch (CIDR)</span>
+              <span>Networks to watch (CIDR, separate several with commas)</span>
               <div className="row gap">
-                <input className="mono" value={form.network} onChange={(e) => set('network', e.target.value)} placeholder="192.168.1.0/24" required />
+                <input className="mono" value={form.network} onChange={(e) => set('network', e.target.value)} placeholder="192.168.1.0/24, 192.168.20.0/24" required />
                 <button type="button" className="btn" onClick={detect} disabled={detecting}>{detecting ? 'Detecting…' : 'Detect'}</button>
               </div>
-              {scanner && scanner.local_ip && <small className="faint">This machine is {scanner.local_ip} on {scanner.iface}.</small>}
+              <small className="faint">ARP does not cross routers: this machine needs an interface on every network it watches, for example a VLAN sub-interface such as <code>eth0.20</code>.</small>
             </label>
+            {interfaces.length > 0 && (
+              <ul className="iface-list">
+                {interfaces.map((i) => {
+                  const listed = form.network.split(/[\s,;]+/).includes(i.network);
+                  return (
+                    <li key={`${i.iface}-${i.ip}`}>
+                      <span className="mono">{i.network}</span>
+                      <span className="faint"> via {i.iface} ({i.ip})</span>
+                      {listed ? <span className="faint small"> watched</span>
+                        : <button type="button" className="btn small quiet" onClick={() => set('network', form.network ? `${form.network}, ${i.network}` : i.network)}>Add</button>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
             <div className="grid2">
               <label className="field">
                 <span>Sweep every (seconds)</span>

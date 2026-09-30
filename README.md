@@ -14,7 +14,13 @@ loudest thing on screen until you name them.
 
 - **Presence.** ARP sweep on a schedule you choose (default every 30 s). A
   device is online while it answers and goes offline after a grace period,
-  so phones that nap do not flap.
+  so phones that nap do not flap. Every online stretch is recorded, so each
+  device has a 24 h strip in the table and a 24 h / 7 day timeline with
+  uptime in its drawer.
+- **Several networks or VLANs.** Watch more than one CIDR. ARP cannot cross a
+  router, so the Pi needs an interface on each network it watches (a tagged
+  VLAN sub-interface such as `eth0.20` is enough); the dashboard warns when
+  one is missing. Devices can be filtered per network.
 - **Device inventory.** MAC, current and previous IP, vendor (looked up once
   and cached), discovered hostname (reverse DNS, mDNS, NetBIOS), your own
   name, type and notes. Randomized "private" MAC addresses are recognized as
@@ -27,6 +33,11 @@ loudest thing on screen until you name them.
 - **Port scans.** A quick scan of ~60 common ports runs automatically for
   each device (interval configurable), with diffs logged. Range and full
   scans on demand, plus banner grabbing and one-click "Open" for web UIs.
+- **Port baseline.** Accept a device's current open ports as expected. From
+  then on only deviations are highlighted (amber for unexpected ports, red
+  for expected ones that closed) and notified; changes inside the baseline
+  are logged quietly. Routers that answer ARP for several addresses keep the
+  lowest as their address and list the rest as aliases.
 - **Notifications.** A JSON webhook fires on the events you choose. Works
   with Home Assistant webhooks, ntfy, n8n, Discord relays and similar.
 - **Runs unattended.** Settings persist in SQLite, the scanner resumes on
@@ -89,6 +100,19 @@ Pi's own subnet), then starts. The scanner resumes automatically after a
 reboot or a crash as long as you left it running. Pressing **Stop** in the
 dashboard also disables the resume-on-boot behaviour; **Start** re-enables it.
 
+### Watching a second VLAN from the Pi
+
+Give the Pi an address on that VLAN, then add the network in Settings. With
+NetworkManager (Raspberry Pi OS Bookworm and later), for VLAN 20 on `eth0`:
+
+```bash
+sudo nmcli con add type vlan con-name vlan20 ifname eth0.20 dev eth0 id 20 ipv4.method auto
+```
+
+The switch port the Pi is on must carry VLAN 20 tagged. Once `ip -br addr`
+shows an address on `eth0.20`, the Settings dialog lists it with an *Add*
+button.
+
 To change the port or database location, edit the `Environment=` lines in
 `/etc/systemd/system/spynet.service`, then
 `sudo systemctl daemon-reload && sudo systemctl restart spynet`.
@@ -111,7 +135,7 @@ Environment variables:
 | `SPYNET_HOST` | `0.0.0.0` | Bind address |
 | `SPYNET_PORT` | `5000` | Port for API and dashboard |
 | `SPYNET_DB` | `./spynet.db` | SQLite database path |
-| `SPYNET_NETWORK` | *(auto)* | Network to watch in CIDR, used when nothing is configured yet |
+| `SPYNET_NETWORK` | *(auto)* | Network(s) to watch in CIDR, comma separated, used when nothing is configured yet |
 | `SPYNET_FRONTEND_DIR` | `./spynet/dist` | Where the built dashboard lives |
 | `SPYNET_PORT_WORKERS` | `128` | Concurrent connections during a port scan |
 
@@ -158,6 +182,8 @@ can do you can script.
 | POST | `/api/devices/acknowledge_all` | Mark every device as recognized |
 | POST | `/api/devices/<mac>/portscan` | `{"mode": "quick"\|"range"\|"full", "start", "end"}` |
 | POST | `/api/devices/<mac>/banner` | `{"port": 22}` |
+| POST | `/api/devices/<mac>/baseline` | `{"mode": "current"}` accepts the open ports, `{"mode": "clear"}` removes the baseline, `{"ports": [22, 443]}` sets one |
+| GET | `/api/presence?hours=24&mac=` | Online spans per device as `[start, end]` pairs (`end` is null while online) |
 | POST | `/api/devices/<mac>/refresh` | Re-run vendor and hostname lookup |
 | GET | `/api/events?limit=&mac=&kind=` | Event log |
 | DELETE | `/api/events` | Clear the log |

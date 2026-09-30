@@ -9,7 +9,7 @@ import SettingsDialog from './components/SettingsDialog.jsx';
 import Toasts, { useToasts } from './components/Toasts.jsx';
 
 export default function App() {
-  const { devices, events, scanner, settings, deviceTypes, connected, loadError, reload } = useSpynet();
+  const { devices, events, presence, scanner, settings, deviceTypes, connected, loadError, reload } = useSpynet();
   const now = useNow(1000);
   const { toasts, toast, dismiss } = useToasts();
   const [selectedMac, setSelectedMac] = useState(null);
@@ -55,6 +55,9 @@ export default function App() {
     portScan: (mac, body) => run(() => api.post(`/api/devices/${mac}/portscan`, body),
       (r) => (r.queued ? 'Port scan queued' : 'A scan is already running for this device')),
     banner: (mac, port) => run(() => api.post(`/api/devices/${mac}/banner`, { port })),
+    acceptBaseline: (mac) => run(() => api.post(`/api/devices/${mac}/baseline`, { mode: 'current' }), 'Current ports accepted as the baseline'),
+    clearBaseline: (mac) => run(() => api.post(`/api/devices/${mac}/baseline`, { mode: 'clear' }), 'Baseline cleared'),
+    fetchPresence: (mac, hours) => api.get(`/api/presence?hours=${hours}&mac=${mac}`),
     refreshDevice: (mac) => run(() => api.post(`/api/devices/${mac}/refresh`), 'Looking up name and vendor'),
     clearEvents: () => run(() => api.del('/api/events'), 'Activity cleared'),
     fetchDevice: (mac) => api.get(`/api/devices/${mac}`),
@@ -100,6 +103,7 @@ export default function App() {
             selectedMac={selectedMac}
             onSelect={selectDevice}
             now={now}
+            presence={presence}
             scanner={scanner}
             actions={actions}
             onOpenSettings={() => setSettingsOpen(true)}
@@ -115,6 +119,8 @@ export default function App() {
           key={selected.mac}
           device={selected}
           deviceTypes={deviceTypes}
+          presence={presence[selected.mac] || []}
+          networks={scanner ? scanner.networks : []}
           now={now}
           actions={actions}
           onClose={() => setSelectedMac(null)}
